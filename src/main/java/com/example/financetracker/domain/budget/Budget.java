@@ -18,11 +18,8 @@ public class Budget {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 150)
-    private String name;
-
-    @Column(name = "limit_amount", nullable = false, precision = 15, scale = 2)
-    private BigDecimal limitAmount;
+    @Column(name = "amount", nullable = false, precision = 15, scale = 2)
+    private BigDecimal amount;
 
     @Column(nullable = false)
     private Integer month;

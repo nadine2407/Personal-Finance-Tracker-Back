@@ -1,6 +1,6 @@
 package com.example.financetracker.domain.budget;
 
-import com.example.financetracker.common.dto.ApiResponse;
+import com.example.financetracker.domain.budget.dto.BudgetPageSummary;
 import com.example.financetracker.domain.budget.dto.BudgetRequest;
 import com.example.financetracker.domain.budget.dto.BudgetResponse;
 import jakarta.validation.Valid;
@@ -11,31 +11,42 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/budgets")
+@RequestMapping("/api/v1/budgets")
 @RequiredArgsConstructor
 public class BudgetController {
 
     private final BudgetService budgetService;
 
-    @GetMapping
-    public ResponseEntity<ApiResponse<List<BudgetResponse>>> getAll() {
-        return ResponseEntity.ok(ApiResponse.ok(budgetService.getAll()));
+    @GetMapping("/status")
+    public ResponseEntity<BudgetPageSummary> getStatus(
+            @RequestParam int month,
+            @RequestParam int year) {
+        return ResponseEntity.ok(budgetService.getStatus(month, year));
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<BudgetResponse>> create(@Valid @RequestBody BudgetRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(budgetService.create(request)));
+    public ResponseEntity<BudgetResponse> create(@Valid @RequestBody BudgetRequest request) {
+        return ResponseEntity.ok(budgetService.create(request));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<BudgetResponse>> update(@PathVariable Long id,
-                                                               @Valid @RequestBody BudgetRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(budgetService.update(id, request)));
+    public ResponseEntity<BudgetResponse> update(@PathVariable Long id,
+                                                  @Valid @RequestBody BudgetRequest request) {
+        return ResponseEntity.ok(budgetService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
         budgetService.delete(id);
-        return ResponseEntity.ok(ApiResponse.ok(null));
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/duplicate")
+    public ResponseEntity<List<BudgetResponse>> duplicate(
+            @RequestParam int fromMonth,
+            @RequestParam int fromYear,
+            @RequestParam int toMonth,
+            @RequestParam int toYear) {
+        return ResponseEntity.ok(budgetService.duplicate(fromMonth, fromYear, toMonth, toYear));
     }
 }
