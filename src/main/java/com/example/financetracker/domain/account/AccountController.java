@@ -1,6 +1,5 @@
 package com.example.financetracker.domain.account;
 
-import com.example.financetracker.common.dto.ApiResponse;
 import com.example.financetracker.domain.account.dto.AccountRequest;
 import com.example.financetracker.domain.account.dto.AccountResponse;
 import jakarta.validation.Valid;
@@ -11,31 +10,31 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/accounts")
+@RequestMapping("/api/v1/accounts")
 @RequiredArgsConstructor
 public class AccountController {
 
     private final AccountService accountService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<AccountResponse>>> getAll() {
-        return ResponseEntity.ok(ApiResponse.ok(accountService.getAll()));
+    public ResponseEntity<List<AccountResponse>> getAll() {
+        return ResponseEntity.ok(accountService.getAll());
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<AccountResponse>> create(@Valid @RequestBody AccountRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(accountService.create(request)));
+    public ResponseEntity<AccountResponse> create(@Valid @RequestBody AccountRequest request) {
+        return ResponseEntity.ok(accountService.create(request));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<AccountResponse>> update(@PathVariable Long id,
-                                                                @Valid @RequestBody AccountRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(accountService.update(id, request)));
+    public ResponseEntity<AccountResponse> update(@PathVariable Long id,
+                                                   @Valid @RequestBody AccountRequest request) {
+        return ResponseEntity.ok(accountService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
         accountService.delete(id);
-        return ResponseEntity.ok(ApiResponse.ok(null));
+        return ResponseEntity.noContent().build();
     }
 }

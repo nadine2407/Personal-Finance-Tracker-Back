@@ -24,8 +24,17 @@ public class Account {
     @Column(nullable = false, length = 20)
     private AccountType type;
 
-    @Column(nullable = false, precision = 15, scale = 2)
-    private BigDecimal balance;
+    @Column(name = "initial_balance", nullable = false, precision = 15, scale = 2)
+    private BigDecimal initialBalance;
+
+    @Column(name = "current_balance", precision = 15, scale = 2)
+    private BigDecimal currentBalance;
+
+    @Column(length = 50)
+    private String color;
+
+    @Column(length = 50)
+    private String icon;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)

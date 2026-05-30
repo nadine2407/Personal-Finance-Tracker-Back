@@ -19,5 +19,8 @@ public class AccountRequest {
 
     @NotNull
     @DecimalMin("0.00")
-    private BigDecimal balance;
+    private BigDecimal initialBalance;
+
+    private String color;
+    private String icon;
 }

@@ -28,7 +28,10 @@ public class AccountService {
         Account account = Account.builder()
                 .name(request.getName())
                 .type(request.getType())
-                .balance(request.getBalance())
+                .initialBalance(request.getInitialBalance())
+                .currentBalance(request.getInitialBalance())
+                .color(request.getColor())
+                .icon(request.getIcon())
                 .user(currentUser())
                 .build();
         return AccountResponse.from(accountRepository.save(account));
@@ -39,7 +42,9 @@ public class AccountService {
                 .orElseThrow(() -> new ResourceNotFoundException("Account", id));
         account.setName(request.getName());
         account.setType(request.getType());
-        account.setBalance(request.getBalance());
+        account.setInitialBalance(request.getInitialBalance());
+        account.setColor(request.getColor());
+        account.setIcon(request.getIcon());
         return AccountResponse.from(accountRepository.save(account));
     }
 
