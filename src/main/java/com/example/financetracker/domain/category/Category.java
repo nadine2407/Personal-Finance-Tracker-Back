@@ -3,6 +3,9 @@ package com.example.financetracker.domain.category;
 import com.example.financetracker.domain.auth.User;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "categories")
@@ -16,11 +19,21 @@ public class Category {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private CategoryType type;
+    @Column(length = 50)
+    private String icon;
+
+    @Column(length = 50)
+    private String color;
+
+    @Column(name = "is_default")
+    @Builder.Default
+    private Boolean isDefault = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id")
     private User user;
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private OffsetDateTime createdAt;
 }

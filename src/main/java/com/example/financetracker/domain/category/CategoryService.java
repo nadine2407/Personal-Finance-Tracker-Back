@@ -20,7 +20,7 @@ public class CategoryService {
 
     public List<CategoryResponse> getAll() {
         User user = currentUser();
-        return categoryRepository.findByUser(user).stream()
+        return categoryRepository.findByUserOrDefault(user).stream()
                 .map(CategoryResponse::from)
                 .toList();
     }
@@ -29,7 +29,9 @@ public class CategoryService {
         User user = currentUser();
         Category category = Category.builder()
                 .name(request.getName())
-                .type(request.getType())
+                .icon(request.getIcon())
+                .color(request.getColor())
+                .isDefault(false)
                 .user(user)
                 .build();
         return CategoryResponse.from(categoryRepository.save(category));
@@ -40,7 +42,8 @@ public class CategoryService {
         Category category = categoryRepository.findByIdAndUser(id, user)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", id));
         category.setName(request.getName());
-        category.setType(request.getType());
+        category.setIcon(request.getIcon());
+        category.setColor(request.getColor());
         return CategoryResponse.from(categoryRepository.save(category));
     }
 

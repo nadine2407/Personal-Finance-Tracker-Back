@@ -3,60 +3,124 @@ package com.example.financetracker.domain.dashboard;
 import com.example.financetracker.common.exception.ResourceNotFoundException;
 import com.example.financetracker.domain.auth.User;
 import com.example.financetracker.domain.auth.UserRepository;
-import com.example.financetracker.domain.budget.BudgetRepository;
-import com.example.financetracker.domain.category.CategoryType;
-import com.example.financetracker.domain.dashboard.dto.DashboardResponse;
-import com.example.financetracker.domain.goal.GoalRepository;
+import com.example.financetracker.domain.category.Category;
+import com.example.financetracker.domain.dashboard.dto.CategoryBreakdown;
+import com.example.financetracker.domain.dashboard.dto.DashboardSummary;
+import com.example.financetracker.domain.dashboard.dto.MonthlyChart;
+import com.example.financetracker.domain.dashboard.dto.MonthlyDataPoint;
 import com.example.financetracker.domain.transaction.Transaction;
 import com.example.financetracker.domain.transaction.TransactionRepository;
-import com.example.financetracker.domain.transaction.dto.TransactionResponse;
+import com.example.financetracker.domain.transaction.TransactionType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @Service
+@Transactional
 @RequiredArgsConstructor
 public class DashboardService {
 
     private final TransactionRepository transactionRepository;
-    private final GoalRepository goalRepository;
-    private final BudgetRepository budgetRepository;
     private final UserRepository userRepository;
 
-    public DashboardResponse getSummary() {
+    public DashboardSummary getSummary(int year, int month) {
         User user = currentUser();
+        LocalDate from = LocalDate.of(year, month, 1);
+        LocalDate to = from.withDayOfMonth(from.lengthOfMonth());
 
-        List<Transaction> allTransactions = transactionRepository.findByUserOrderByDateDesc(user);
+        List<Transaction> transactions = transactionRepository.findByUserAndTransactionDateBetween(user, from, to);
 
-        BigDecimal totalIncome = transactionRepository
-                .findByUserAndCategory_TypeOrderByDateDesc(user, CategoryType.INCOME)
-                .stream()
-                .map(Transaction::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalIncome = sum(transactions, TransactionType.INCOME);
+        BigDecimal totalExpenses = sum(transactions, TransactionType.EXPENSE);
+        BigDecimal netSavings = totalIncome.subtract(totalExpenses);
 
-        BigDecimal totalExpenses = transactionRepository
-                .findByUserAndCategory_TypeOrderByDateDesc(user, CategoryType.EXPENSE)
-                .stream()
-                .map(Transaction::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Group expense amounts by category ID
+        Map<Long, BigDecimal> amountByCatId = transactions.stream()
+                .filter(t -> t.getType() == TransactionType.EXPENSE && t.getCategory() != null)
+                .collect(Collectors.groupingBy(
+                        t -> t.getCategory().getId(),
+                        Collectors.reducing(BigDecimal.ZERO, Transaction::getAmount, BigDecimal::add)));
 
-        List<TransactionResponse> recent = allTransactions.stream()
-                .limit(5)
-                .map(TransactionResponse::from)
+        // Get a representative category object per ID
+        Map<Long, Category> categoryById = transactions.stream()
+                .filter(t -> t.getType() == TransactionType.EXPENSE && t.getCategory() != null)
+                .collect(Collectors.toMap(
+                        t -> t.getCategory().getId(),
+                        Transaction::getCategory,
+                        (a, b) -> a));
+
+        List<CategoryBreakdown> breakdown = amountByCatId.entrySet().stream()
+                .map(e -> {
+                    Category cat = categoryById.get(e.getKey());
+                    double pct = totalExpenses.compareTo(BigDecimal.ZERO) > 0
+                            ? e.getValue().multiply(BigDecimal.valueOf(100))
+                                    .divide(totalExpenses, 2, RoundingMode.HALF_UP).doubleValue()
+                            : 0.0;
+                    return CategoryBreakdown.builder()
+                            .name(cat != null ? cat.getName() : "")
+                            .color(cat != null ? cat.getColor() : null)
+                            .icon(cat != null ? cat.getIcon() : null)
+                            .amount(e.getValue().doubleValue())
+                            .percentage(pct)
+                            .build();
+                })
+                .sorted(Comparator.comparingDouble(CategoryBreakdown::getAmount).reversed())
                 .toList();
 
-        DashboardResponse response = new DashboardResponse();
-        response.setTotalIncome(totalIncome);
-        response.setTotalExpenses(totalExpenses);
-        response.setBalance(totalIncome.subtract(totalExpenses));
-        response.setTotalTransactions(allTransactions.size());
-        response.setTotalGoals(goalRepository.findByUser(user).size());
-        response.setTotalBudgets(budgetRepository.findByUser(user).size());
-        response.setRecentTransactions(recent);
-        return response;
+        return DashboardSummary.builder()
+                .year(year)
+                .month(month)
+                .totalIncome(totalIncome.doubleValue())
+                .totalExpenses(totalExpenses.doubleValue())
+                .netSavings(netSavings.doubleValue())
+                .categoryBreakdown(breakdown)
+                .build();
+    }
+
+    public MonthlyChart getMonthlyChart(int year) {
+        User user = currentUser();
+        LocalDate from = LocalDate.of(year, 1, 1);
+        LocalDate to = LocalDate.of(year, 12, 31);
+
+        List<Transaction> transactions = transactionRepository.findByUserAndTransactionDateBetween(user, from, to);
+
+        Map<Integer, List<Transaction>> byMonth = transactions.stream()
+                .filter(t -> t.getTransactionDate() != null)
+                .collect(Collectors.groupingBy(t -> t.getTransactionDate().getMonthValue()));
+
+        List<MonthlyDataPoint> data = IntStream.rangeClosed(1, 12)
+                .mapToObj(m -> {
+                    List<Transaction> monthTxns = byMonth.getOrDefault(m, List.of());
+                    double income = monthTxns.stream()
+                            .filter(t -> t.getType() == TransactionType.INCOME)
+                            .mapToDouble(t -> t.getAmount().doubleValue())
+                            .sum();
+                    double expenses = monthTxns.stream()
+                            .filter(t -> t.getType() == TransactionType.EXPENSE)
+                            .mapToDouble(t -> t.getAmount().doubleValue())
+                            .sum();
+                    return MonthlyDataPoint.builder().month(m).income(income).expenses(expenses).build();
+                })
+                .toList();
+
+        return MonthlyChart.builder().year(year).data(data).build();
+    }
+
+    private BigDecimal sum(List<Transaction> transactions, TransactionType type) {
+        return transactions.stream()
+                .filter(t -> t.getType() == type)
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private User currentUser() {

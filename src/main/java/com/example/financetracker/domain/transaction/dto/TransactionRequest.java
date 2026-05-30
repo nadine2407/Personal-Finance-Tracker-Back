@@ -1,5 +1,6 @@
 package com.example.financetracker.domain.transaction.dto;
 
+import com.example.financetracker.domain.transaction.TransactionType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -11,14 +12,23 @@ import java.time.LocalDate;
 public class TransactionRequest {
 
     @NotNull
+    private TransactionType type;
+
+    @NotNull
     @DecimalMin("0.01")
     private BigDecimal amount;
 
     private String description;
 
     @NotNull
-    private LocalDate date;
+    private LocalDate transactionDate;
 
     @NotNull
     private Long categoryId;
+
+    private String notes;
+    private Long accountId;
+    private Boolean recurring;
+    private String recurrenceFrequency;
+    private Boolean split;
 }

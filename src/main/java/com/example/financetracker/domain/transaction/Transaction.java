@@ -5,6 +5,7 @@ import com.example.financetracker.domain.category.Category;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -19,18 +20,37 @@ public class Transaction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private TransactionType type;
+
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
 
     @Column(length = 255)
     private String description;
 
-    @Column(nullable = false)
-    private LocalDate date;
+    @Column(name = "transaction_date")
+    private LocalDate transactionDate;
+
+    @Column(length = 500)
+    private String notes;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "category_id", nullable = false)
+    @JoinColumn(name = "category_id")
     private Category category;
+
+    @Column(name = "account_id")
+    private Long accountId;
+
+    @Column(name = "is_recurring")
+    private Boolean recurring;
+
+    @Column(name = "recurrence_frequency", length = 20)
+    private String recurrenceFrequency;
+
+    @Column(name = "is_split")
+    private Boolean split;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -39,4 +59,8 @@ public class Transaction {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private OffsetDateTime updatedAt;
 }

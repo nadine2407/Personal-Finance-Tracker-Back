@@ -1,52 +1,43 @@
 package com.example.financetracker.domain.transaction;
 
-import com.example.financetracker.common.dto.ApiResponse;
-import com.example.financetracker.domain.category.CategoryType;
+import com.example.financetracker.common.dto.PageResponse;
 import com.example.financetracker.domain.transaction.dto.TransactionRequest;
 import com.example.financetracker.domain.transaction.dto.TransactionResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
-import java.util.List;
-
 @RestController
-@RequestMapping("/api/transactions")
+@RequestMapping("/api/v1/transactions")
 @RequiredArgsConstructor
 public class TransactionController {
 
     private final TransactionService transactionService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<TransactionResponse>>> getAll() {
-        return ResponseEntity.ok(ApiResponse.ok(transactionService.getAll()));
-    }
-
-    @GetMapping("/filter")
-    public ResponseEntity<ApiResponse<List<TransactionResponse>>> filter(
-            @RequestParam(required = false) CategoryType type,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return ResponseEntity.ok(ApiResponse.ok(transactionService.filter(type, from, to)));
+    public ResponseEntity<PageResponse<TransactionResponse>> getAll(
+            @RequestParam(required = false) TransactionType type,
+            @PageableDefault(size = 10, sort = "transactionDate") Pageable pageable) {
+        return ResponseEntity.ok(transactionService.getAll(type, pageable));
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<TransactionResponse>> create(@Valid @RequestBody TransactionRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(transactionService.create(request)));
+    public ResponseEntity<TransactionResponse> create(@Valid @RequestBody TransactionRequest request) {
+        return ResponseEntity.ok(transactionService.create(request));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<TransactionResponse>> update(@PathVariable Long id,
-                                                                    @Valid @RequestBody TransactionRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(transactionService.update(id, request)));
+    public ResponseEntity<TransactionResponse> update(@PathVariable Long id,
+                                                       @Valid @RequestBody TransactionRequest request) {
+        return ResponseEntity.ok(transactionService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
         transactionService.delete(id);
-        return ResponseEntity.ok(ApiResponse.ok(null));
+        return ResponseEntity.noContent().build();
     }
 }
