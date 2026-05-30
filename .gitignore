@@ -21,3 +21,7 @@ target/
 
 ### Env & secrets ###
 .env
+
+### Local ###
+compose.yaml
+frontend/
