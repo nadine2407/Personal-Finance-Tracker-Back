@@ -5,12 +5,14 @@ import com.example.financetracker.domain.auth.User;
 import com.example.financetracker.domain.auth.UserRepository;
 import com.example.financetracker.domain.category.Category;
 import com.example.financetracker.domain.category.CategoryRepository;
+import com.example.financetracker.domain.category.CategoryType;
 import com.example.financetracker.domain.transaction.dto.TransactionRequest;
 import com.example.financetracker.domain.transaction.dto.TransactionResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -25,6 +27,21 @@ public class TransactionService {
         return transactionRepository.findByUserOrderByDateDesc(currentUser()).stream()
                 .map(TransactionResponse::from)
                 .toList();
+    }
+
+    public List<TransactionResponse> filter(CategoryType type, LocalDate from, LocalDate to) {
+        User user = currentUser();
+        if (type != null) {
+            return transactionRepository.findByUserAndCategory_TypeOrderByDateDesc(user, type).stream()
+                    .map(TransactionResponse::from)
+                    .toList();
+        }
+        if (from != null && to != null) {
+            return transactionRepository.findByUserAndDateBetweenOrderByDateDesc(user, from, to).stream()
+                    .map(TransactionResponse::from)
+                    .toList();
+        }
+        return getAll();
     }
 
     public TransactionResponse create(TransactionRequest request) {
