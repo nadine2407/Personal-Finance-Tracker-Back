@@ -4,6 +4,7 @@ import com.example.financetracker.domain.auth.User;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -24,11 +25,14 @@ public class Goal {
     @Column(name = "target_amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal targetAmount;
 
-    @Column(name = "saved_amount", nullable = false, precision = 15, scale = 2)
-    private BigDecimal savedAmount;
+    @Column(name = "current_amount", nullable = false, precision = 15, scale = 2)
+    private BigDecimal currentAmount;
 
-    @Column(name = "target_date")
-    private LocalDate targetDate;
+    @Column(name = "deadline")
+    private LocalDate deadline;
+
+    @Column(length = 500)
+    private String description;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -37,4 +41,8 @@ public class Goal {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private OffsetDateTime updatedAt;
 }

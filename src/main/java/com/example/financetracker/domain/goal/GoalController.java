@@ -1,6 +1,6 @@
 package com.example.financetracker.domain.goal;
 
-import com.example.financetracker.common.dto.ApiResponse;
+import com.example.financetracker.domain.goal.dto.DepositRequest;
 import com.example.financetracker.domain.goal.dto.GoalRequest;
 import com.example.financetracker.domain.goal.dto.GoalResponse;
 import jakarta.validation.Valid;
@@ -11,31 +11,37 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/goals")
+@RequestMapping("/api/v1/goals")
 @RequiredArgsConstructor
 public class GoalController {
 
     private final GoalService goalService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<GoalResponse>>> getAll() {
-        return ResponseEntity.ok(ApiResponse.ok(goalService.getAll()));
+    public ResponseEntity<List<GoalResponse>> getAll() {
+        return ResponseEntity.ok(goalService.getAll());
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<GoalResponse>> create(@Valid @RequestBody GoalRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(goalService.create(request)));
+    public ResponseEntity<GoalResponse> create(@Valid @RequestBody GoalRequest request) {
+        return ResponseEntity.ok(goalService.create(request));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<GoalResponse>> update(@PathVariable Long id,
-                                                            @Valid @RequestBody GoalRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(goalService.update(id, request)));
+    public ResponseEntity<GoalResponse> update(@PathVariable Long id,
+                                                @Valid @RequestBody GoalRequest request) {
+        return ResponseEntity.ok(goalService.update(id, request));
+    }
+
+    @PatchMapping("/{id}/deposit")
+    public ResponseEntity<GoalResponse> deposit(@PathVariable Long id,
+                                                 @Valid @RequestBody DepositRequest request) {
+        return ResponseEntity.ok(goalService.deposit(id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
         goalService.delete(id);
-        return ResponseEntity.ok(ApiResponse.ok(null));
+        return ResponseEntity.noContent().build();
     }
 }
