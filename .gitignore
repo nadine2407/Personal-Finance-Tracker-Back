@@ -1,0 +1,23 @@
+### Maven ###
+target/
+
+### Java ###
+*.class
+*.jar
+*.war
+
+### IDE ###
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.classpath
+.project
+
+### Logs ###
+*.log
+
+### Env & secrets ###
+.env
