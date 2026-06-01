@@ -2,7 +2,6 @@ package com.example.financetracker.domain.transaction;
 
 import com.example.financetracker.common.dto.PageResponse;
 import com.example.financetracker.common.exception.ResourceNotFoundException;
-import com.example.financetracker.domain.account.Account;
 import com.example.financetracker.domain.account.AccountRepository;
 import com.example.financetracker.domain.auth.User;
 import com.example.financetracker.domain.auth.UserRepository;
@@ -105,7 +104,7 @@ public class TransactionService {
         accountRepository.findById(accountId).ifPresent(account -> {
             BigDecimal current = account.getCurrentBalance() != null ? account.getCurrentBalance() : BigDecimal.ZERO;
             boolean isIncome = type == TransactionType.INCOME;
-            boolean add = isIncome != reverse; // XOR: income adds unless reversing, expense subtracts unless reversing
+            boolean add = isIncome != reverse;
             account.setCurrentBalance(add ? current.add(amount) : current.subtract(amount));
             accountRepository.save(account);
         });
