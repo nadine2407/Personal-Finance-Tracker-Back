@@ -2,6 +2,8 @@ package com.example.financetracker.domain.transaction;
 
 import com.example.financetracker.common.dto.PageResponse;
 import com.example.financetracker.common.exception.ResourceNotFoundException;
+import com.example.financetracker.domain.account.Account;
+import com.example.financetracker.domain.account.AccountRepository;
 import com.example.financetracker.domain.auth.User;
 import com.example.financetracker.domain.auth.UserRepository;
 import com.example.financetracker.domain.category.Category;
@@ -25,11 +27,12 @@ public class TransactionService {
 
     private final TransactionRepository transactionRepository;
     private final CategoryRepository categoryRepository;
+    private final AccountRepository accountRepository;
     private final UserRepository userRepository;
 
     public PageResponse<TransactionResponse> getAll(TransactionType type, Long categoryId,
             LocalDate startDate, LocalDate endDate, BigDecimal minAmount, BigDecimal maxAmount,
-            String search, Pageable pageable) {
+            String search, Boolean recurring, Boolean split, Pageable pageable) {
         User user = currentUser();
         Specification<Transaction> spec = TransactionSpec.forUser(user);
         if (type != null)       spec = spec.and(TransactionSpec.hasType(type));
@@ -39,6 +42,8 @@ public class TransactionService {
         if (minAmount != null)  spec = spec.and(TransactionSpec.amountMin(minAmount));
         if (maxAmount != null)  spec = spec.and(TransactionSpec.amountMax(maxAmount));
         if (search != null && !search.isBlank()) spec = spec.and(TransactionSpec.searchText(search));
+        if (recurring != null)  spec = spec.and(TransactionSpec.isRecurring(recurring));
+        if (split != null)      spec = spec.and(TransactionSpec.isSplit(split));
         return PageResponse.from(transactionRepository.findAll(spec, pageable).map(TransactionResponse::from));
     }
 
@@ -59,7 +64,9 @@ public class TransactionService {
                 .category(category)
                 .user(user)
                 .build();
-        return TransactionResponse.from(transactionRepository.save(transaction));
+        Transaction saved = transactionRepository.save(transaction);
+        adjustBalance(request.getAccountId(), request.getType(), request.getAmount(), false);
+        return TransactionResponse.from(saved);
     }
 
     public TransactionResponse update(Long id, TransactionRequest request) {
@@ -68,6 +75,11 @@ public class TransactionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", id));
         Category category = categoryRepository.findByIdAndUserOrDefault(request.getCategoryId(), user)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", request.getCategoryId()));
+
+        // Reverse old effect, apply new effect
+        adjustBalance(transaction.getAccountId(), transaction.getType(), transaction.getAmount(), true);
+        adjustBalance(request.getAccountId(), request.getType(), request.getAmount(), false);
+
         transaction.setType(request.getType());
         transaction.setAmount(request.getAmount());
         transaction.setDescription(request.getDescription());
@@ -84,7 +96,19 @@ public class TransactionService {
     public void delete(Long id) {
         Transaction transaction = transactionRepository.findByIdAndUser(id, currentUser())
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", id));
+        adjustBalance(transaction.getAccountId(), transaction.getType(), transaction.getAmount(), true);
         transactionRepository.delete(transaction);
+    }
+
+    private void adjustBalance(Long accountId, TransactionType type, BigDecimal amount, boolean reverse) {
+        if (accountId == null || amount == null) return;
+        accountRepository.findById(accountId).ifPresent(account -> {
+            BigDecimal current = account.getCurrentBalance() != null ? account.getCurrentBalance() : BigDecimal.ZERO;
+            boolean isIncome = type == TransactionType.INCOME;
+            boolean add = isIncome != reverse; // XOR: income adds unless reversing, expense subtracts unless reversing
+            account.setCurrentBalance(add ? current.add(amount) : current.subtract(amount));
+            accountRepository.save(account);
+        });
     }
 
     private User currentUser() {
