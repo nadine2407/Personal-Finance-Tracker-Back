@@ -21,6 +21,7 @@ target/
 
 ### Env & secrets ###
 .env
+src/main/resources/application-local.properties
 
 ### Local ###
 compose.yaml
