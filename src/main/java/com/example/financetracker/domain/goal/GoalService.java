@@ -58,6 +58,14 @@ public class GoalService {
         return GoalResponse.from(goalRepository.save(goal));
     }
 
+    public GoalResponse withdraw(Long id, DepositRequest request) {
+        Goal goal = goalRepository.findByIdAndUser(id, currentUser())
+                .orElseThrow(() -> new ResourceNotFoundException("Goal", id));
+        BigDecimal current = goal.getCurrentAmount() != null ? goal.getCurrentAmount() : BigDecimal.ZERO;
+        goal.setCurrentAmount(current.subtract(request.getAmount()).max(BigDecimal.ZERO));
+        return GoalResponse.from(goalRepository.save(goal));
+    }
+
     public void delete(Long id) {
         Goal goal = goalRepository.findByIdAndUser(id, currentUser())
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", id));

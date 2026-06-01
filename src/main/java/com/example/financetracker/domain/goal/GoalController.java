@@ -39,6 +39,12 @@ public class GoalController {
         return ResponseEntity.ok(goalService.deposit(id, request));
     }
 
+    @PatchMapping("/{id}/withdraw")
+    public ResponseEntity<GoalResponse> withdraw(@PathVariable Long id,
+                                                  @Valid @RequestBody DepositRequest request) {
+        return ResponseEntity.ok(goalService.withdraw(id, request));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         goalService.delete(id);
