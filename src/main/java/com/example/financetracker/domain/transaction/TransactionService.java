@@ -9,11 +9,14 @@ import com.example.financetracker.domain.category.CategoryRepository;
 import com.example.financetracker.domain.transaction.dto.TransactionRequest;
 import com.example.financetracker.domain.transaction.dto.TransactionResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Service
 @Transactional
@@ -24,15 +27,19 @@ public class TransactionService {
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
 
-    public PageResponse<TransactionResponse> getAll(TransactionType type, Pageable pageable) {
+    public PageResponse<TransactionResponse> getAll(TransactionType type, Long categoryId,
+            LocalDate startDate, LocalDate endDate, BigDecimal minAmount, BigDecimal maxAmount,
+            String search, Pageable pageable) {
         User user = currentUser();
-        Page<Transaction> page;
-        if (type != null) {
-            page = transactionRepository.findByUserAndType(user, type, pageable);
-        } else {
-            page = transactionRepository.findByUser(user, pageable);
-        }
-        return PageResponse.from(page.map(TransactionResponse::from));
+        Specification<Transaction> spec = TransactionSpec.forUser(user);
+        if (type != null)       spec = spec.and(TransactionSpec.hasType(type));
+        if (categoryId != null) spec = spec.and(TransactionSpec.hasCategoryId(categoryId));
+        if (startDate != null)  spec = spec.and(TransactionSpec.afterOrOn(startDate));
+        if (endDate != null)    spec = spec.and(TransactionSpec.beforeOrOn(endDate));
+        if (minAmount != null)  spec = spec.and(TransactionSpec.amountMin(minAmount));
+        if (maxAmount != null)  spec = spec.and(TransactionSpec.amountMax(maxAmount));
+        if (search != null && !search.isBlank()) spec = spec.and(TransactionSpec.searchText(search));
+        return PageResponse.from(transactionRepository.findAll(spec, pageable).map(TransactionResponse::from));
     }
 
     public TransactionResponse create(TransactionRequest request) {
