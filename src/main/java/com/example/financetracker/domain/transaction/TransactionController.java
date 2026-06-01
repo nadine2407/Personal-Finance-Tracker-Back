@@ -3,6 +3,8 @@ package com.example.financetracker.domain.transaction;
 import com.example.financetracker.common.dto.PageResponse;
 import com.example.financetracker.domain.transaction.dto.TransactionRequest;
 import com.example.financetracker.domain.transaction.dto.TransactionResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -16,12 +18,14 @@ import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/v1/transactions")
+@Tag(name = "Transactions")
 @RequiredArgsConstructor
 public class TransactionController {
 
     private final TransactionService transactionService;
 
     @GetMapping
+    @Operation(summary = "Get all transactions with optional filters")
     public ResponseEntity<PageResponse<TransactionResponse>> getAll(
             @RequestParam(required = false) TransactionType type,
             @RequestParam(required = false) Long categoryId,
@@ -37,17 +41,20 @@ public class TransactionController {
     }
 
     @PostMapping
+    @Operation(summary = "Create a transaction")
     public ResponseEntity<TransactionResponse> create(@Valid @RequestBody TransactionRequest request) {
         return ResponseEntity.ok(transactionService.create(request));
     }
 
     @PutMapping("/{id}")
+    @Operation(summary = "Update a transaction")
     public ResponseEntity<TransactionResponse> update(@PathVariable Long id,
                                                        @Valid @RequestBody TransactionRequest request) {
         return ResponseEntity.ok(transactionService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
+    @Operation(summary = "Delete a transaction")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         transactionService.delete(id);
         return ResponseEntity.noContent().build();
