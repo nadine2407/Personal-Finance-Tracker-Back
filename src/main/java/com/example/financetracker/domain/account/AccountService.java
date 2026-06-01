@@ -5,10 +5,12 @@ import com.example.financetracker.domain.auth.User;
 import com.example.financetracker.domain.auth.UserRepository;
 import com.example.financetracker.domain.account.dto.AccountRequest;
 import com.example.financetracker.domain.account.dto.AccountResponse;
+import com.example.financetracker.domain.goal.GoalRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Service
@@ -17,10 +19,14 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
+    private final GoalRepository goalRepository;
 
     public List<AccountResponse> getAll() {
         return accountRepository.findByUser(currentUser()).stream()
-                .map(AccountResponse::from)
+                .map(account -> {
+                    BigDecimal allocated = goalRepository.sumLinkedAccountAmountByAccount(account);
+                    return AccountResponse.from(account, allocated);
+                })
                 .toList();
     }
 
@@ -34,7 +40,7 @@ public class AccountService {
                 .icon(request.getIcon())
                 .user(currentUser())
                 .build();
-        return AccountResponse.from(accountRepository.save(account));
+        return AccountResponse.from(accountRepository.save(account), BigDecimal.ZERO);
     }
 
     public AccountResponse update(Long id, AccountRequest request) {
@@ -45,7 +51,8 @@ public class AccountService {
         account.setInitialBalance(request.getInitialBalance());
         account.setColor(request.getColor());
         account.setIcon(request.getIcon());
-        return AccountResponse.from(accountRepository.save(account));
+        BigDecimal allocated = goalRepository.sumLinkedAccountAmountByAccount(account);
+        return AccountResponse.from(accountRepository.save(account), allocated);
     }
 
     public void delete(Long id) {

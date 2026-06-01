@@ -1,5 +1,6 @@
 package com.example.financetracker.domain.goal;
 
+import com.example.financetracker.domain.account.Account;
 import com.example.financetracker.domain.auth.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -33,6 +34,13 @@ public class Goal {
 
     @Column(length = 500)
     private String description;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "linked_account_id")
+    private Account linkedAccount;
+
+    @Column(name = "linked_account_amount", precision = 15, scale = 2)
+    private BigDecimal linkedAccountAmount;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)

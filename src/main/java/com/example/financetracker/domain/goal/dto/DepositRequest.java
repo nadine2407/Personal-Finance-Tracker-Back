@@ -11,4 +11,6 @@ public class DepositRequest {
     @NotNull
     @DecimalMin("0.01")
     private BigDecimal amount;
+
+    private Long accountId;
 }

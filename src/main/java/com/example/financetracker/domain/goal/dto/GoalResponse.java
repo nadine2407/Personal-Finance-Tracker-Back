@@ -20,6 +20,8 @@ public class GoalResponse {
     private boolean completed;
     private double progressPercent;
     private BigDecimal remainingAmount;
+    private Long linkedAccountId;
+    private BigDecimal linkedAccountAmount;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 
@@ -31,6 +33,8 @@ public class GoalResponse {
         dto.setCurrentAmount(goal.getCurrentAmount());
         dto.setDeadline(goal.getDeadline());
         dto.setDescription(goal.getDescription());
+        dto.setLinkedAccountId(goal.getLinkedAccount() != null ? goal.getLinkedAccount().getId() : null);
+        dto.setLinkedAccountAmount(goal.getLinkedAccountAmount() != null ? goal.getLinkedAccountAmount() : BigDecimal.ZERO);
         dto.setCreatedAt(goal.getCreatedAt());
         dto.setUpdatedAt(goal.getUpdatedAt());
 

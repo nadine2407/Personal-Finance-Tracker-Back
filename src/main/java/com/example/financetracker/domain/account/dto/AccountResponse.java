@@ -14,18 +14,24 @@ public class AccountResponse {
     private AccountType type;
     private BigDecimal initialBalance;
     private BigDecimal currentBalance;
+    private BigDecimal goalAllocatedAmount;
+    private BigDecimal effectiveBalance;
     private String color;
     private String icon;
 
-    public static AccountResponse from(Account account) {
+    public static AccountResponse from(Account account, BigDecimal goalAllocated) {
         AccountResponse dto = new AccountResponse();
         dto.setId(account.getId());
         dto.setName(account.getName());
         dto.setType(account.getType());
         dto.setInitialBalance(account.getInitialBalance());
-        dto.setCurrentBalance(account.getCurrentBalance() != null
+        BigDecimal balance = account.getCurrentBalance() != null
                 ? account.getCurrentBalance()
-                : account.getInitialBalance());
+                : account.getInitialBalance();
+        dto.setCurrentBalance(balance);
+        BigDecimal allocated = goalAllocated != null ? goalAllocated : BigDecimal.ZERO;
+        dto.setGoalAllocatedAmount(allocated);
+        dto.setEffectiveBalance(balance.subtract(allocated));
         dto.setColor(account.getColor());
         dto.setIcon(account.getIcon());
         return dto;

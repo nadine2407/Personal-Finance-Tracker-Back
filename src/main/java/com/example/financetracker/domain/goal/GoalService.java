@@ -1,6 +1,8 @@
 package com.example.financetracker.domain.goal;
 
 import com.example.financetracker.common.exception.ResourceNotFoundException;
+import com.example.financetracker.domain.account.Account;
+import com.example.financetracker.domain.account.AccountRepository;
 import com.example.financetracker.domain.auth.User;
 import com.example.financetracker.domain.auth.UserRepository;
 import com.example.financetracker.domain.goal.dto.DepositRequest;
@@ -21,6 +23,7 @@ public class GoalService {
 
     private final GoalRepository goalRepository;
     private final UserRepository userRepository;
+    private final AccountRepository accountRepository;
 
     public List<GoalResponse> getAll() {
         return goalRepository.findByUser(currentUser()).stream()
@@ -55,6 +58,15 @@ public class GoalService {
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", id));
         BigDecimal current = goal.getCurrentAmount() != null ? goal.getCurrentAmount() : BigDecimal.ZERO;
         goal.setCurrentAmount(current.add(request.getAmount()));
+
+        if (request.getAccountId() != null) {
+            Account account = accountRepository.findByIdAndUser(request.getAccountId(), currentUser())
+                    .orElseThrow(() -> new ResourceNotFoundException("Account", request.getAccountId()));
+            goal.setLinkedAccount(account);
+            BigDecimal linked = goal.getLinkedAccountAmount() != null ? goal.getLinkedAccountAmount() : BigDecimal.ZERO;
+            goal.setLinkedAccountAmount(linked.add(request.getAmount()));
+        }
+
         return GoalResponse.from(goalRepository.save(goal));
     }
 
@@ -63,6 +75,11 @@ public class GoalService {
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", id));
         BigDecimal current = goal.getCurrentAmount() != null ? goal.getCurrentAmount() : BigDecimal.ZERO;
         goal.setCurrentAmount(current.subtract(request.getAmount()).max(BigDecimal.ZERO));
+
+        if (goal.getLinkedAccountAmount() != null && goal.getLinkedAccountAmount().compareTo(BigDecimal.ZERO) > 0) {
+            goal.setLinkedAccountAmount(goal.getLinkedAccountAmount().subtract(request.getAmount()).max(BigDecimal.ZERO));
+        }
+
         return GoalResponse.from(goalRepository.save(goal));
     }
 
