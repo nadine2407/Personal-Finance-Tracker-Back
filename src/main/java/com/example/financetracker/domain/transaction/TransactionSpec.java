@@ -48,7 +48,4 @@ public class TransactionSpec {
         return (root, query, cb) -> cb.equal(root.get("recurring"), recurring);
     }
 
-    public static Specification<Transaction> isSplit(Boolean split) {
-        return (root, query, cb) -> cb.equal(root.get("split"), split);
-    }
 }

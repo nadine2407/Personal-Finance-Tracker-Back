@@ -49,9 +49,6 @@ public class Transaction {
     @Column(name = "recurrence_frequency", length = 20)
     private String recurrenceFrequency;
 
-    @Column(name = "is_split")
-    private Boolean split;
-
     @Column(name = "is_hidden")
     private Boolean hidden;
 

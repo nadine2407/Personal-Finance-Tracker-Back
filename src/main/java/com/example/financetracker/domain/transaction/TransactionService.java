@@ -32,7 +32,7 @@ public class TransactionService {
 
     public PageResponse<TransactionResponse> getAll(TransactionType type, Long categoryId,
             LocalDate startDate, LocalDate endDate, BigDecimal minAmount, BigDecimal maxAmount,
-            String search, Boolean recurring, Boolean split, Pageable pageable) {
+            String search, Boolean recurring, Pageable pageable) {
         User user = currentUser();
         Specification<Transaction> spec = TransactionSpec.forUser(user);
         if (type != null)       spec = spec.and(TransactionSpec.hasType(type));
@@ -43,7 +43,6 @@ public class TransactionService {
         if (maxAmount != null)  spec = spec.and(TransactionSpec.amountMax(maxAmount));
         if (search != null && !search.isBlank()) spec = spec.and(TransactionSpec.searchText(search));
         if (recurring != null)  spec = spec.and(TransactionSpec.isRecurring(recurring));
-        if (split != null)      spec = spec.and(TransactionSpec.isSplit(split));
         return PageResponse.from(transactionRepository.findAll(spec, pageable).map(TransactionResponse::from));
     }
 
@@ -60,7 +59,6 @@ public class TransactionService {
                 .accountId(request.getAccountId())
                 .recurring(request.getRecurring() != null ? request.getRecurring() : false)
                 .recurrenceFrequency(request.getRecurrenceFrequency())
-                .split(request.getSplit() != null ? request.getSplit() : false)
                 .category(category)
                 .user(user)
                 .build();
@@ -90,7 +88,6 @@ public class TransactionService {
         transaction.setAccountId(request.getAccountId());
         transaction.setRecurring(request.getRecurring() != null ? request.getRecurring() : false);
         transaction.setRecurrenceFrequency(request.getRecurrenceFrequency());
-        transaction.setSplit(request.getSplit() != null ? request.getSplit() : false);
         transaction.setCategory(category);
         return TransactionResponse.from(transactionRepository.save(transaction));
     }

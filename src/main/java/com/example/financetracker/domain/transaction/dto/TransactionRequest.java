@@ -30,5 +30,4 @@ public class TransactionRequest {
     private Long accountId;
     private Boolean recurring;
     private String recurrenceFrequency;
-    private Boolean split;
 }
