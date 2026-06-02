@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -16,10 +17,52 @@ public class DataInitializer implements ApplicationRunner {
 
     private final CategoryRepository categoryRepository;
 
+    // Mapping: old English name → correct French name
+    private static final Map<String, String> RENAME_MAP = Map.ofEntries(
+        Map.entry("Food",           "Alimentation"),
+        Map.entry("Housing",        "Logement"),
+        Map.entry("Health",         "Santé"),
+        Map.entry("Entertainment",  "Loisirs"),
+        Map.entry("Education",      "Éducation"),
+        Map.entry("Travel",         "Voyages"),
+        Map.entry("Salary",         "Salaire"),
+        Map.entry("Investment",     "Investissement"),
+        Map.entry("Others",         "Autres"),
+        Map.entry("Other",          "Autres"),
+        Map.entry("Groceries",      "Alimentation"),
+        Map.entry("Rent",           "Logement")
+    );
+
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        renameOldCategories();
         seedDefaultCategories();
+    }
+
+    /**
+     * Renames old English default category names to their French equivalents.
+     * Only renames when the French equivalent does not yet exist (avoids duplicates).
+     * Never deletes — categories may have transactions linked.
+     */
+    private void renameOldCategories() {
+        List<Category> allDefaults = categoryRepository.findAll().stream()
+                .filter(c -> Boolean.TRUE.equals(c.getIsDefault()))
+                .toList();
+
+        for (Category cat : allDefaults) {
+            String frenchName = RENAME_MAP.get(cat.getName());
+            if (frenchName == null) continue; // already French or not in map
+
+            boolean frenchAlreadyExists = allDefaults.stream()
+                    .anyMatch(c -> c.getName().equals(frenchName));
+
+            if (!frenchAlreadyExists) {
+                cat.setName(frenchName);
+                categoryRepository.save(cat);
+            }
+            // If French name already exists, leave both — cannot delete due to FK constraints
+        }
     }
 
     private void seedDefaultCategories() {

@@ -1,6 +1,7 @@
 package com.example.financetracker.domain.transaction;
 
 import com.example.financetracker.common.dto.PageResponse;
+import com.example.financetracker.domain.transaction.dto.NoteRequest;
 import com.example.financetracker.domain.transaction.dto.TransactionRequest;
 import com.example.financetracker.domain.transaction.dto.TransactionResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -51,6 +52,13 @@ public class TransactionController {
     public ResponseEntity<TransactionResponse> update(@PathVariable Long id,
                                                        @Valid @RequestBody TransactionRequest request) {
         return ResponseEntity.ok(transactionService.update(id, request));
+    }
+
+    @PatchMapping("/{id}/note")
+    @Operation(summary = "Update the note of a transaction")
+    public ResponseEntity<TransactionResponse> updateNote(@PathVariable Long id,
+                                                           @RequestBody NoteRequest request) {
+        return ResponseEntity.ok(transactionService.updateNote(id, request));
     }
 
     @PatchMapping("/{id}/hidden")

@@ -7,6 +7,7 @@ import com.example.financetracker.domain.auth.User;
 import com.example.financetracker.domain.auth.UserRepository;
 import com.example.financetracker.domain.category.Category;
 import com.example.financetracker.domain.category.CategoryRepository;
+import com.example.financetracker.domain.transaction.dto.NoteRequest;
 import com.example.financetracker.domain.transaction.dto.TransactionRequest;
 import com.example.financetracker.domain.transaction.dto.TransactionResponse;
 import lombok.RequiredArgsConstructor;
@@ -91,6 +92,13 @@ public class TransactionService {
         transaction.setRecurrenceFrequency(request.getRecurrenceFrequency());
         transaction.setSplit(request.getSplit() != null ? request.getSplit() : false);
         transaction.setCategory(category);
+        return TransactionResponse.from(transactionRepository.save(transaction));
+    }
+
+    public TransactionResponse updateNote(Long id, NoteRequest request) {
+        Transaction transaction = transactionRepository.findByIdAndUser(id, currentUser())
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction", id));
+        transaction.setNotes(request.getNotes());
         return TransactionResponse.from(transactionRepository.save(transaction));
     }
 
