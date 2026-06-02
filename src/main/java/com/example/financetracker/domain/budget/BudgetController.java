@@ -48,7 +48,7 @@ public class BudgetController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/duplicate")
+    @PostMapping("/copies")
     @Operation(summary = "Duplicate budgets from a previous month")
     public ResponseEntity<List<BudgetResponse>> duplicate(
             @RequestParam int fromMonth,

@@ -39,14 +39,14 @@ public class GoalController {
         return ResponseEntity.ok(goalService.update(id, request));
     }
 
-    @PatchMapping("/{id}/deposit")
+    @PatchMapping("/{id}/deposits")
     @Operation(summary = "Add funds to a savings goal")
     public ResponseEntity<GoalResponse> deposit(@PathVariable Long id,
                                                  @Valid @RequestBody DepositRequest request) {
         return ResponseEntity.ok(goalService.deposit(id, request));
     }
 
-    @PatchMapping("/{id}/withdraw")
+    @PatchMapping("/{id}/withdrawals")
     @Operation(summary = "Withdraw funds from a savings goal")
     public ResponseEntity<GoalResponse> withdraw(@PathVariable Long id,
                                                   @Valid @RequestBody DepositRequest request) {
