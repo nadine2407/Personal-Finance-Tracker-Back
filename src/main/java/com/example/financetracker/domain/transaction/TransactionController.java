@@ -53,6 +53,12 @@ public class TransactionController {
         return ResponseEntity.ok(transactionService.update(id, request));
     }
 
+    @PatchMapping("/{id}/hidden")
+    @Operation(summary = "Toggle hidden state of a transaction")
+    public ResponseEntity<TransactionResponse> toggleHidden(@PathVariable Long id) {
+        return ResponseEntity.ok(transactionService.toggleHidden(id));
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete a transaction")
     public ResponseEntity<Void> delete(@PathVariable Long id) {

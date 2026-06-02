@@ -23,6 +23,7 @@ public class TransactionResponse {
     private Boolean recurring;
     private String recurrenceFrequency;
     private Boolean split;
+    private Boolean hidden;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 
@@ -46,6 +47,7 @@ public class TransactionResponse {
         dto.setRecurring(t.getRecurring());
         dto.setRecurrenceFrequency(t.getRecurrenceFrequency());
         dto.setSplit(t.getSplit());
+        dto.setHidden(Boolean.TRUE.equals(t.getHidden()));
         dto.setCreatedAt(t.getCreatedAt());
         dto.setUpdatedAt(t.getUpdatedAt());
 

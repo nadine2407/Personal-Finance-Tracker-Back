@@ -75,9 +75,11 @@ public class TransactionService {
         Category category = categoryRepository.findByIdAndUserOrDefault(request.getCategoryId(), user)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", request.getCategoryId()));
 
-        // Reverse old effect, apply new effect
-        adjustBalance(transaction.getAccountId(), transaction.getType(), transaction.getAmount(), true);
-        adjustBalance(request.getAccountId(), request.getType(), request.getAmount(), false);
+        // Only adjust balance if not hidden (hidden transactions don't affect balance)
+        if (!Boolean.TRUE.equals(transaction.getHidden())) {
+            adjustBalance(transaction.getAccountId(), transaction.getType(), transaction.getAmount(), true);
+            adjustBalance(request.getAccountId(), request.getType(), request.getAmount(), false);
+        }
 
         transaction.setType(request.getType());
         transaction.setAmount(request.getAmount());
@@ -92,10 +94,23 @@ public class TransactionService {
         return TransactionResponse.from(transactionRepository.save(transaction));
     }
 
+    public TransactionResponse toggleHidden(Long id) {
+        Transaction transaction = transactionRepository.findByIdAndUser(id, currentUser())
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction", id));
+        boolean nowHidden = !Boolean.TRUE.equals(transaction.getHidden());
+        transaction.setHidden(nowHidden);
+        // Reverse balance when hiding, reapply when un-hiding
+        adjustBalance(transaction.getAccountId(), transaction.getType(), transaction.getAmount(), nowHidden);
+        return TransactionResponse.from(transactionRepository.save(transaction));
+    }
+
     public void delete(Long id) {
         Transaction transaction = transactionRepository.findByIdAndUser(id, currentUser())
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", id));
-        adjustBalance(transaction.getAccountId(), transaction.getType(), transaction.getAmount(), true);
+        // Only reverse balance if not already hidden (balance was already reversed on hide)
+        if (!Boolean.TRUE.equals(transaction.getHidden())) {
+            adjustBalance(transaction.getAccountId(), transaction.getType(), transaction.getAmount(), true);
+        }
         transactionRepository.delete(transaction);
     }
 

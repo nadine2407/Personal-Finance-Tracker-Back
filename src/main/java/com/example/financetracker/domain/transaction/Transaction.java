@@ -52,6 +52,9 @@ public class Transaction {
     @Column(name = "is_split")
     private Boolean split;
 
+    @Column(name = "is_hidden")
+    private Boolean hidden;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

@@ -38,7 +38,8 @@ public class DashboardService {
         LocalDate from = LocalDate.of(year, month, 1);
         LocalDate to = from.withDayOfMonth(from.lengthOfMonth());
 
-        List<Transaction> transactions = transactionRepository.findByUserAndTransactionDateBetween(user, from, to);
+        List<Transaction> transactions = transactionRepository.findByUserAndTransactionDateBetween(user, from, to)
+                .stream().filter(t -> !Boolean.TRUE.equals(t.getHidden())).toList();
 
         BigDecimal totalIncome = sum(transactions, TransactionType.INCOME);
         BigDecimal totalExpenses = sum(transactions, TransactionType.EXPENSE);
@@ -92,7 +93,8 @@ public class DashboardService {
         LocalDate from = LocalDate.of(year, 1, 1);
         LocalDate to = LocalDate.of(year, 12, 31);
 
-        List<Transaction> transactions = transactionRepository.findByUserAndTransactionDateBetween(user, from, to);
+        List<Transaction> transactions = transactionRepository.findByUserAndTransactionDateBetween(user, from, to)
+                .stream().filter(t -> !Boolean.TRUE.equals(t.getHidden())).toList();
 
         Map<Integer, List<Transaction>> byMonth = transactions.stream()
                 .filter(t -> t.getTransactionDate() != null)

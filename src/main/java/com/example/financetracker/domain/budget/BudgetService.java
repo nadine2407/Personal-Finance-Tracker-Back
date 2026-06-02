@@ -46,7 +46,7 @@ public class BudgetService {
                 user, TransactionType.EXPENSE, from, to);
 
         Map<Long, BigDecimal> spentByCategory = expenses.stream()
-                .filter(t -> t.getCategory() != null)
+                .filter(t -> t.getCategory() != null && !Boolean.TRUE.equals(t.getHidden()))
                 .collect(Collectors.groupingBy(
                         t -> t.getCategory().getId(),
                         Collectors.reducing(BigDecimal.ZERO, Transaction::getAmount, BigDecimal::add)));
