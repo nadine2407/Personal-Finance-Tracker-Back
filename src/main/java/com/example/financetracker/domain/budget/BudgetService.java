@@ -22,6 +22,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -137,16 +138,24 @@ public class BudgetService {
         User user = currentUser();
         List<Budget> source = budgetRepository.findByUserAndMonthAndYear(user, fromMonth, fromYear);
         List<Budget> existing = budgetRepository.findByUserAndMonthAndYear(user, toMonth, toYear);
-        budgetRepository.deleteAll(existing);
 
-        List<Budget> copies = source.stream().map(b -> Budget.builder()
-                .amount(b.getAmount())
-                .month(toMonth)
-                .year(toYear)
-                .category(b.getCategory())
-                .user(user)
-                .build()).toList();
-        return budgetRepository.saveAll(copies).stream().map(BudgetResponse::from).toList();
+        Set<Long> existingCategoryIds = existing.stream()
+                .filter(b -> b.getCategory() != null)
+                .map(b -> b.getCategory().getId())
+                .collect(Collectors.toSet());
+
+        List<Budget> toAdd = source.stream()
+                .filter(b -> b.getCategory() == null || !existingCategoryIds.contains(b.getCategory().getId()))
+                .map(b -> Budget.builder()
+                        .amount(b.getAmount())
+                        .month(toMonth)
+                        .year(toYear)
+                        .category(b.getCategory())
+                        .user(user)
+                        .build())
+                .toList();
+
+        return budgetRepository.saveAll(toAdd).stream().map(BudgetResponse::from).toList();
     }
 
     private Category resolveCategory(Long categoryId, User user) {
