@@ -3,9 +3,10 @@ package com.example.financetracker.domain.goal;
 import com.example.financetracker.common.exception.ResourceNotFoundException;
 import com.example.financetracker.domain.account.Account;
 import com.example.financetracker.domain.account.AccountRepository;
+import com.example.financetracker.domain.account.AccountType;
 import com.example.financetracker.domain.auth.User;
 import com.example.financetracker.domain.auth.UserRepository;
-import com.example.financetracker.domain.goal.dto.DepositRequest;
+import com.example.financetracker.domain.goal.dto.AllocationRequest;
 import com.example.financetracker.domain.goal.dto.GoalRequest;
 import com.example.financetracker.domain.goal.dto.GoalResponse;
 import lombok.RequiredArgsConstructor;
@@ -32,61 +33,168 @@ public class GoalService {
     }
 
     public GoalResponse create(GoalRequest request) {
+        User user = currentUser();
+
+        Account linkedAccount = resolveLinkedAccount(request.getLinkedAccountId(), user);
+        BigDecimal allocated = request.getAllocatedAmount() != null ? request.getAllocatedAmount() : BigDecimal.ZERO;
+
+        if (allocated.compareTo(BigDecimal.ZERO) > 0) {
+            validateAllocation(linkedAccount, null, allocated);
+        }
+
+        int priority = goalRepository.findMaxPriorityByLinkedAccountAndUser(linkedAccount, user) + 1;
+
         Goal goal = Goal.builder()
                 .name(request.getName())
                 .targetAmount(request.getTargetAmount())
-                .currentAmount(BigDecimal.ZERO)
+                .currentAmount(allocated)
                 .deadline(request.getDeadline())
                 .description(request.getDescription())
-                .user(currentUser())
+                .linkedAccount(linkedAccount)
+                .linkedAccountAmount(allocated)
+                .priority(priority)
+                .user(user)
                 .build();
+
         return GoalResponse.from(goalRepository.save(goal));
     }
 
     public GoalResponse update(Long id, GoalRequest request) {
-        Goal goal = goalRepository.findByIdAndUser(id, currentUser())
+        User user = currentUser();
+        Goal goal = goalRepository.findByIdAndUser(id, user)
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", id));
+
         goal.setName(request.getName());
         goal.setTargetAmount(request.getTargetAmount());
         goal.setDeadline(request.getDeadline());
         goal.setDescription(request.getDescription());
-        return GoalResponse.from(goalRepository.save(goal));
-    }
-
-    public GoalResponse deposit(Long id, DepositRequest request) {
-        Goal goal = goalRepository.findByIdAndUser(id, currentUser())
-                .orElseThrow(() -> new ResourceNotFoundException("Goal", id));
-        BigDecimal current = goal.getCurrentAmount() != null ? goal.getCurrentAmount() : BigDecimal.ZERO;
-        goal.setCurrentAmount(current.add(request.getAmount()));
-
-        if (request.getAccountId() != null) {
-            Account account = accountRepository.findByIdAndUser(request.getAccountId(), currentUser())
-                    .orElseThrow(() -> new ResourceNotFoundException("Account", request.getAccountId()));
-            goal.setLinkedAccount(account);
-            BigDecimal linked = goal.getLinkedAccountAmount() != null ? goal.getLinkedAccountAmount() : BigDecimal.ZERO;
-            goal.setLinkedAccountAmount(linked.add(request.getAmount()));
-        }
 
         return GoalResponse.from(goalRepository.save(goal));
     }
 
-    public GoalResponse withdraw(Long id, DepositRequest request) {
-        Goal goal = goalRepository.findByIdAndUser(id, currentUser())
+    /**
+     * Modifie le montant alloué à un objectif (valeur absolue, pas un delta).
+     * Valide que la somme totale des allocations ne dépasse pas le solde du compte.
+     */
+    public GoalResponse allocate(Long id, AllocationRequest request) {
+        User user = currentUser();
+        Goal goal = goalRepository.findByIdAndUser(id, user)
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", id));
-        BigDecimal current = goal.getCurrentAmount() != null ? goal.getCurrentAmount() : BigDecimal.ZERO;
-        goal.setCurrentAmount(current.subtract(request.getAmount()).max(BigDecimal.ZERO));
 
-        if (goal.getLinkedAccountAmount() != null && goal.getLinkedAccountAmount().compareTo(BigDecimal.ZERO) > 0) {
-            goal.setLinkedAccountAmount(goal.getLinkedAccountAmount().subtract(request.getAmount()).max(BigDecimal.ZERO));
+        if (goal.getLinkedAccount() != null) {
+            validateAllocation(goal.getLinkedAccount(), id, request.getAllocatedAmount());
         }
 
+        goal.setLinkedAccountAmount(request.getAllocatedAmount());
+        goal.setCurrentAmount(request.getAllocatedAmount());
+
         return GoalResponse.from(goalRepository.save(goal));
+    }
+
+    /**
+     * Remonte ou descend un objectif dans l'ordre de priorité de son compte.
+     * Priorité 1 = la plus haute (sera préservée en dernier lors d'un retrait en cascade).
+     */
+    public void movePriority(Long id, String direction) {
+        User user = currentUser();
+        Goal goal = goalRepository.findByIdAndUser(id, user)
+                .orElseThrow(() -> new ResourceNotFoundException("Goal", id));
+
+        if (goal.getLinkedAccount() == null) return;
+
+        List<Goal> siblings = goalRepository.findByLinkedAccountAndUserOrderByPriorityAsc(goal.getLinkedAccount(), user);
+        int idx = -1;
+        for (int i = 0; i < siblings.size(); i++) {
+            if (siblings.get(i).getId().equals(id)) { idx = i; break; }
+        }
+        if (idx == -1) return;
+
+        int swapIdx = "up".equals(direction) ? idx - 1 : idx + 1;
+        if (swapIdx < 0 || swapIdx >= siblings.size()) return;
+
+        Goal other = siblings.get(swapIdx);
+        Integer tmp = goal.getPriority();
+        goal.setPriority(other.getPriority());
+        other.setPriority(tmp);
+
+        goalRepository.save(goal);
+        goalRepository.save(other);
     }
 
     public void delete(Long id) {
         Goal goal = goalRepository.findByIdAndUser(id, currentUser())
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", id));
         goalRepository.delete(goal);
+    }
+
+    /**
+     * Rééquilibre automatiquement les allocations d'un compte épargne après un débit.
+     * Applique la règle en cascade : épargne libre d'abord, puis objectifs du moins prioritaire au plus prioritaire.
+     * Appelé depuis TransactionService après chaque modification de solde.
+     */
+    public void rebalanceIfNeeded(Long accountId) {
+        if (accountId == null) return;
+        accountRepository.findById(accountId).ifPresent(account -> {
+            if (account.getType() != AccountType.SAVINGS) return;
+
+            BigDecimal balance = account.getCurrentBalance() != null
+                    ? account.getCurrentBalance()
+                    : BigDecimal.ZERO;
+            BigDecimal totalAllocated = goalRepository.sumLinkedAccountAmountByAccount(account);
+
+            if (totalAllocated.compareTo(balance) <= 0) return; // rien à faire
+
+            // Excédent à absorber en partant des objectifs les moins prioritaires
+            BigDecimal excess = totalAllocated.subtract(balance);
+            List<Goal> goals = goalRepository.findByLinkedAccountOrderByPriorityDesc(account);
+
+            for (Goal goal : goals) {
+                if (excess.compareTo(BigDecimal.ZERO) <= 0) break;
+                BigDecimal current = goal.getLinkedAccountAmount() != null ? goal.getLinkedAccountAmount() : BigDecimal.ZERO;
+                BigDecimal reduce = current.min(excess);
+                if (reduce.compareTo(BigDecimal.ZERO) > 0) {
+                    goal.setLinkedAccountAmount(current.subtract(reduce));
+                    goal.setCurrentAmount(goal.getLinkedAccountAmount());
+                    goalRepository.save(goal);
+                    excess = excess.subtract(reduce);
+                }
+            }
+        });
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    private Account resolveLinkedAccount(Long accountId, User user) {
+        if (accountId == null) throw new IllegalArgumentException("Un objectif doit être lié à un compte épargne");
+        Account account = accountRepository.findByIdAndUser(accountId, user)
+                .orElseThrow(() -> new ResourceNotFoundException("Account", accountId));
+        if (account.getType() != AccountType.SAVINGS) {
+            throw new IllegalArgumentException("Les objectifs ne peuvent être liés qu'à un compte épargne");
+        }
+        return account;
+    }
+
+    private void validateAllocation(Account account, Long excludeGoalId, BigDecimal newAmount) {
+        BigDecimal totalAllocated = goalRepository.sumLinkedAccountAmountByAccount(account);
+
+        if (excludeGoalId != null) {
+            goalRepository.findById(excludeGoalId).ifPresent(existing -> {
+                // will be captured in lambda but we need effective-final trick
+            });
+            // Manual subtraction of current goal's allocation
+            BigDecimal currentAlloc = goalRepository.findById(excludeGoalId)
+                    .map(g -> g.getLinkedAccountAmount() != null ? g.getLinkedAccountAmount() : BigDecimal.ZERO)
+                    .orElse(BigDecimal.ZERO);
+            totalAllocated = totalAllocated.subtract(currentAlloc);
+        }
+
+        BigDecimal balance = account.getCurrentBalance() != null
+                ? account.getCurrentBalance()
+                : account.getInitialBalance();
+
+        if (totalAllocated.add(newAmount).compareTo(balance) > 0) {
+            throw new IllegalArgumentException("Le montant alloué dépasse le solde disponible du compte épargne");
+        }
     }
 
     private User currentUser() {

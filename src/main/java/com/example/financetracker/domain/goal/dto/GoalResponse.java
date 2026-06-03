@@ -14,14 +14,15 @@ public class GoalResponse {
     private Long id;
     private String name;
     private BigDecimal targetAmount;
-    private BigDecimal currentAmount;
+    private BigDecimal allocatedAmount;
     private LocalDate deadline;
     private String description;
     private boolean completed;
     private double progressPercent;
     private BigDecimal remainingAmount;
     private Long linkedAccountId;
-    private BigDecimal linkedAccountAmount;
+    private String linkedAccountName;
+    private Integer priority;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 
@@ -30,22 +31,29 @@ public class GoalResponse {
         dto.setId(goal.getId());
         dto.setName(goal.getName());
         dto.setTargetAmount(goal.getTargetAmount());
-        dto.setCurrentAmount(goal.getCurrentAmount());
         dto.setDeadline(goal.getDeadline());
         dto.setDescription(goal.getDescription());
-        dto.setLinkedAccountId(goal.getLinkedAccount() != null ? goal.getLinkedAccount().getId() : null);
-        dto.setLinkedAccountAmount(goal.getLinkedAccountAmount() != null ? goal.getLinkedAccountAmount() : BigDecimal.ZERO);
+        dto.setPriority(goal.getPriority());
         dto.setCreatedAt(goal.getCreatedAt());
         dto.setUpdatedAt(goal.getUpdatedAt());
 
-        BigDecimal current = goal.getCurrentAmount() != null ? goal.getCurrentAmount() : BigDecimal.ZERO;
-        BigDecimal target = goal.getTargetAmount();
+        // Allocated amount = what's concretely reserved on the linked account
+        BigDecimal allocated = goal.getLinkedAccountAmount() != null
+                ? goal.getLinkedAccountAmount()
+                : BigDecimal.ZERO;
+        dto.setAllocatedAmount(allocated);
 
-        dto.setCompleted(current.compareTo(target) >= 0);
-        dto.setRemainingAmount(target.subtract(current).max(BigDecimal.ZERO));
+        if (goal.getLinkedAccount() != null) {
+            dto.setLinkedAccountId(goal.getLinkedAccount().getId());
+            dto.setLinkedAccountName(goal.getLinkedAccount().getName());
+        }
+
+        BigDecimal target = goal.getTargetAmount();
+        dto.setCompleted(allocated.compareTo(target) >= 0);
+        dto.setRemainingAmount(target.subtract(allocated).max(BigDecimal.ZERO));
 
         if (target.compareTo(BigDecimal.ZERO) > 0) {
-            double pct = current.multiply(BigDecimal.valueOf(100))
+            double pct = allocated.multiply(BigDecimal.valueOf(100))
                     .divide(target, 2, RoundingMode.HALF_UP)
                     .doubleValue();
             dto.setProgressPercent(Math.min(pct, 100.0));

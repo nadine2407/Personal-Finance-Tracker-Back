@@ -42,6 +42,9 @@ public class Goal {
     @Column(name = "linked_account_amount", precision = 15, scale = 2)
     private BigDecimal linkedAccountAmount;
 
+    @Column(name = "priority")
+    private Integer priority;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

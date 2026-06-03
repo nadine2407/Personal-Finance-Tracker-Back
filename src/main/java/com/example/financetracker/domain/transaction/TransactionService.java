@@ -7,6 +7,7 @@ import com.example.financetracker.domain.auth.User;
 import com.example.financetracker.domain.auth.UserRepository;
 import com.example.financetracker.domain.category.Category;
 import com.example.financetracker.domain.category.CategoryRepository;
+import com.example.financetracker.domain.goal.GoalService;
 import com.example.financetracker.domain.transaction.dto.NoteRequest;
 import com.example.financetracker.domain.transaction.dto.TransactionRequest;
 import com.example.financetracker.domain.transaction.dto.TransactionResponse;
@@ -29,6 +30,7 @@ public class TransactionService {
     private final CategoryRepository categoryRepository;
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
+    private final GoalService goalService;
 
     public PageResponse<TransactionResponse> getAll(TransactionType type, Long categoryId,
             LocalDate startDate, LocalDate endDate, BigDecimal minAmount, BigDecimal maxAmount,
@@ -66,6 +68,7 @@ public class TransactionService {
                 .build();
         Transaction saved = transactionRepository.save(transaction);
         applyBalanceEffect(request.getType(), request.getAccountId(), request.getDestinationAccountId(), request.getAmount(), false);
+        rebalanceAccounts(request.getAccountId(), request.getDestinationAccountId());
         return TransactionResponse.from(saved);
     }
 
@@ -75,7 +78,6 @@ public class TransactionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", id));
         Category category = resolveCategory(request, user);
 
-        // Only adjust balance if not hidden (hidden transactions don't affect balance)
         if (!Boolean.TRUE.equals(transaction.getHidden())) {
             applyBalanceEffect(transaction.getType(), transaction.getAccountId(), transaction.getDestinationAccountId(), transaction.getAmount(), true);
             applyBalanceEffect(request.getType(), request.getAccountId(), request.getDestinationAccountId(), request.getAmount(), false);
@@ -91,6 +93,10 @@ public class TransactionService {
         transaction.setRecurring(request.getRecurring() != null ? request.getRecurring() : false);
         transaction.setRecurrenceFrequency(request.getRecurrenceFrequency());
         transaction.setCategory(category);
+
+        rebalanceAccounts(transaction.getAccountId(), transaction.getDestinationAccountId());
+        rebalanceAccounts(request.getAccountId(), request.getDestinationAccountId());
+
         return TransactionResponse.from(transactionRepository.save(transaction));
     }
 
@@ -106,19 +112,26 @@ public class TransactionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", id));
         boolean nowHidden = !Boolean.TRUE.equals(transaction.getHidden());
         transaction.setHidden(nowHidden);
-        // Reverse balance when hiding, reapply when un-hiding
         applyBalanceEffect(transaction.getType(), transaction.getAccountId(), transaction.getDestinationAccountId(), transaction.getAmount(), nowHidden);
+        rebalanceAccounts(transaction.getAccountId(), transaction.getDestinationAccountId());
         return TransactionResponse.from(transactionRepository.save(transaction));
     }
 
     public void delete(Long id) {
         Transaction transaction = transactionRepository.findByIdAndUser(id, currentUser())
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", id));
-        // Only reverse balance if not already hidden (balance was already reversed on hide)
         if (!Boolean.TRUE.equals(transaction.getHidden())) {
             applyBalanceEffect(transaction.getType(), transaction.getAccountId(), transaction.getDestinationAccountId(), transaction.getAmount(), true);
         }
+        rebalanceAccounts(transaction.getAccountId(), transaction.getDestinationAccountId());
         transactionRepository.delete(transaction);
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    private void rebalanceAccounts(Long accountId, Long destinationAccountId) {
+        goalService.rebalanceIfNeeded(accountId);
+        goalService.rebalanceIfNeeded(destinationAccountId);
     }
 
     private Category resolveCategory(TransactionRequest request, User user) {
@@ -127,16 +140,11 @@ public class TransactionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Category", request.getCategoryId()));
     }
 
-    /**
-     * Applies or reverses the balance effect of a transaction.
-     * For TRANSFER: source loses money, destination gains money (reversed when reverse=true).
-     * For INCOME/EXPENSE: standard XOR logic.
-     */
     private void applyBalanceEffect(TransactionType type, Long accountId, Long destinationAccountId, BigDecimal amount, boolean reverse) {
         if (amount == null) return;
         if (type == TransactionType.TRANSFER) {
-            adjustSingleBalance(accountId, amount, reverse);           // source: add back when reversing, subtract when not
-            adjustSingleBalance(destinationAccountId, amount, !reverse); // dest: subtract when reversing, add when not
+            adjustSingleBalance(accountId, amount, reverse);
+            adjustSingleBalance(destinationAccountId, amount, !reverse);
         } else {
             boolean isIncome = type == TransactionType.INCOME;
             adjustSingleBalance(accountId, amount, isIncome != reverse);

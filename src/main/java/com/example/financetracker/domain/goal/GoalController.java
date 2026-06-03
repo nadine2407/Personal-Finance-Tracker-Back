@@ -1,6 +1,6 @@
 package com.example.financetracker.domain.goal;
 
-import com.example.financetracker.domain.goal.dto.DepositRequest;
+import com.example.financetracker.domain.goal.dto.AllocationRequest;
 import com.example.financetracker.domain.goal.dto.GoalRequest;
 import com.example.financetracker.domain.goal.dto.GoalResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,18 +39,19 @@ public class GoalController {
         return ResponseEntity.ok(goalService.update(id, request));
     }
 
-    @PatchMapping("/{id}/deposits")
-    @Operation(summary = "Add funds to a savings goal")
-    public ResponseEntity<GoalResponse> deposit(@PathVariable Long id,
-                                                 @Valid @RequestBody DepositRequest request) {
-        return ResponseEntity.ok(goalService.deposit(id, request));
+    @PatchMapping("/{id}/allocation")
+    @Operation(summary = "Set the allocated amount for a goal (absolute value)")
+    public ResponseEntity<GoalResponse> allocate(@PathVariable Long id,
+                                                  @Valid @RequestBody AllocationRequest request) {
+        return ResponseEntity.ok(goalService.allocate(id, request));
     }
 
-    @PatchMapping("/{id}/withdrawals")
-    @Operation(summary = "Withdraw funds from a savings goal")
-    public ResponseEntity<GoalResponse> withdraw(@PathVariable Long id,
-                                                  @Valid @RequestBody DepositRequest request) {
-        return ResponseEntity.ok(goalService.withdraw(id, request));
+    @PatchMapping("/{id}/priority")
+    @Operation(summary = "Move a goal up or down in priority order")
+    public ResponseEntity<Void> movePriority(@PathVariable Long id,
+                                              @RequestParam String direction) {
+        goalService.movePriority(id, direction);
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{id}")

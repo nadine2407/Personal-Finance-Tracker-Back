@@ -1,9 +1,12 @@
 package com.example.financetracker.domain.goal;
 
 import com.example.financetracker.common.exception.ResourceNotFoundException;
+import com.example.financetracker.domain.account.Account;
+import com.example.financetracker.domain.account.AccountRepository;
+import com.example.financetracker.domain.account.AccountType;
 import com.example.financetracker.domain.auth.User;
 import com.example.financetracker.domain.auth.UserRepository;
-import com.example.financetracker.domain.goal.dto.DepositRequest;
+import com.example.financetracker.domain.goal.dto.AllocationRequest;
 import com.example.financetracker.domain.goal.dto.GoalRequest;
 import com.example.financetracker.domain.goal.dto.GoalResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,7 +20,6 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
@@ -29,6 +31,7 @@ class GoalServiceTest {
 
     @Mock private GoalRepository goalRepository;
     @Mock private UserRepository userRepository;
+    @Mock private AccountRepository accountRepository;
 
     @InjectMocks
     private GoalService goalService;
@@ -50,104 +53,97 @@ class GoalServiceTest {
     }
 
     @Test
-    void create_shouldInitializeCurrentAmountToZero() {
+    void create_shouldInitializeAllocatedAmountToZero() {
+        Account account = Account.builder().id(10L).name("Livret A")
+                .type(AccountType.SAVINGS)
+                .currentBalance(new BigDecimal("5000.00"))
+                .initialBalance(new BigDecimal("5000.00"))
+                .user(user).build();
+
         GoalRequest request = new GoalRequest();
         request.setName("Vacances");
         request.setTargetAmount(new BigDecimal("2000.00"));
-        request.setDeadline(LocalDate.now().plusMonths(6));
+        request.setLinkedAccountId(10L);
+
+        when(accountRepository.findByIdAndUser(10L, user)).thenReturn(Optional.of(account));
+        when(goalRepository.findMaxPriorityByLinkedAccountAndUser(account, user)).thenReturn(0);
 
         Goal savedGoal = Goal.builder().id(1L).name("Vacances")
                 .targetAmount(new BigDecimal("2000.00"))
                 .currentAmount(BigDecimal.ZERO)
+                .linkedAccountAmount(BigDecimal.ZERO)
+                .linkedAccount(account)
                 .user(user).build();
         when(goalRepository.save(any())).thenReturn(savedGoal);
 
         GoalResponse response = goalService.create(request);
 
-        assertThat(response.getCurrentAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(response.getAllocatedAmount()).isEqualByComparingTo(BigDecimal.ZERO);
     }
 
     @Test
-    void deposit_shouldAddAmountToCurrentAmount() {
-        Goal goal = Goal.builder().id(1L).name("Vacances")
-                .targetAmount(new BigDecimal("2000.00"))
-                .currentAmount(new BigDecimal("500.00"))
+    void allocate_shouldSetAllocatedAmount() {
+        Account account = Account.builder().id(10L).name("Livret A")
+                .type(AccountType.SAVINGS)
+                .currentBalance(new BigDecimal("5000.00"))
+                .initialBalance(new BigDecimal("5000.00"))
                 .user(user).build();
 
-        DepositRequest request = new DepositRequest();
-        request.setAmount(new BigDecimal("300.00"));
-
-        when(goalRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(goal));
-        when(goalRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-        GoalResponse response = goalService.deposit(1L, request);
-
-        // 500 + 300 = 800
-        assertThat(response.getCurrentAmount()).isEqualByComparingTo("800.00");
-    }
-
-    @Test
-    void withdraw_shouldSubtractAmountFromCurrentAmount() {
         Goal goal = Goal.builder().id(1L).name("Vacances")
                 .targetAmount(new BigDecimal("2000.00"))
-                .currentAmount(new BigDecimal("500.00"))
+                .currentAmount(BigDecimal.ZERO)
+                .linkedAccountAmount(BigDecimal.ZERO)
+                .linkedAccount(account)
                 .user(user).build();
 
-        DepositRequest request = new DepositRequest();
-        request.setAmount(new BigDecimal("200.00"));
+        AllocationRequest request = new AllocationRequest();
+        request.setAllocatedAmount(new BigDecimal("800.00"));
 
         when(goalRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(goal));
+        when(goalRepository.sumLinkedAccountAmountByAccount(account)).thenReturn(BigDecimal.ZERO);
+        when(goalRepository.findById(1L)).thenReturn(Optional.of(goal));
         when(goalRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        GoalResponse response = goalService.withdraw(1L, request);
+        GoalResponse response = goalService.allocate(1L, request);
 
-        // 500 - 200 = 300
-        assertThat(response.getCurrentAmount()).isEqualByComparingTo("300.00");
+        assertThat(response.getAllocatedAmount()).isEqualByComparingTo("800.00");
     }
 
     @Test
-    void withdraw_shouldNotGoBelowZero() {
-        Goal goal = Goal.builder().id(1L).name("Vacances")
-                .targetAmount(new BigDecimal("2000.00"))
-                .currentAmount(new BigDecimal("100.00"))
-                .user(user).build();
-
-        DepositRequest request = new DepositRequest();
-        request.setAmount(new BigDecimal("500.00")); // plus que disponible
-
-        when(goalRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(goal));
-        when(goalRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-        GoalResponse response = goalService.withdraw(1L, request);
-
-        assertThat(response.getCurrentAmount()).isEqualByComparingTo(BigDecimal.ZERO);
-    }
-
-    @Test
-    void deposit_goalNotFound_shouldThrow() {
+    void allocate_goalNotFound_shouldThrow() {
         when(goalRepository.findByIdAndUser(99L, user)).thenReturn(Optional.empty());
 
-        DepositRequest request = new DepositRequest();
-        request.setAmount(new BigDecimal("100.00"));
+        AllocationRequest request = new AllocationRequest();
+        request.setAllocatedAmount(new BigDecimal("100.00"));
 
-        assertThatThrownBy(() -> goalService.deposit(99L, request))
+        assertThatThrownBy(() -> goalService.allocate(99L, request))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
-    void deposit_whenGoalReachesTarget_shouldBeCompleted() {
+    void allocate_whenReachesTarget_shouldBeCompleted() {
+        Account account = Account.builder().id(10L).name("Livret A")
+                .type(AccountType.SAVINGS)
+                .currentBalance(new BigDecimal("5000.00"))
+                .initialBalance(new BigDecimal("5000.00"))
+                .user(user).build();
+
         Goal goal = Goal.builder().id(1L).name("Vacances")
                 .targetAmount(new BigDecimal("1000.00"))
                 .currentAmount(new BigDecimal("900.00"))
+                .linkedAccountAmount(new BigDecimal("900.00"))
+                .linkedAccount(account)
                 .user(user).build();
 
-        DepositRequest request = new DepositRequest();
-        request.setAmount(new BigDecimal("100.00"));
+        AllocationRequest request = new AllocationRequest();
+        request.setAllocatedAmount(new BigDecimal("1000.00"));
 
         when(goalRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(goal));
+        when(goalRepository.sumLinkedAccountAmountByAccount(account)).thenReturn(new BigDecimal("900.00"));
+        when(goalRepository.findById(1L)).thenReturn(Optional.of(goal));
         when(goalRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        GoalResponse response = goalService.deposit(1L, request);
+        GoalResponse response = goalService.allocate(1L, request);
 
         assertThat(response.isCompleted()).isTrue();
         assertThat(response.getProgressPercent()).isEqualTo(100.0);

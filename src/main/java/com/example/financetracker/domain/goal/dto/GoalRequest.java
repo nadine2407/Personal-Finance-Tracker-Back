@@ -20,4 +20,12 @@ public class GoalRequest {
 
     private LocalDate deadline;
     private String description;
+
+    /** ID du compte épargne auquel cet objectif est rattaché (obligatoire). */
+    @NotNull
+    private Long linkedAccountId;
+
+    /** Montant initialement alloué depuis le compte épargne (0 si non renseigné). */
+    @DecimalMin("0.00")
+    private BigDecimal allocatedAmount;
 }
