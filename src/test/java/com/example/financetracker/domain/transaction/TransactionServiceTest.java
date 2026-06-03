@@ -71,7 +71,7 @@ class TransactionServiceTest {
         when(categoryRepository.findByIdAndUserOrDefault(5L, user)).thenReturn(Optional.of(category));
         Transaction saved = Transaction.builder().id(1L).type(TransactionType.INCOME)
                 .amount(new BigDecimal("500.00")).transactionDate(LocalDate.now())
-                .category(category).user(user).recurring(false).split(false).build();
+                .category(category).user(user).recurring(false).build();
         when(transactionRepository.save(any())).thenReturn(saved);
         when(accountRepository.findById(10L)).thenReturn(Optional.of(account));
         when(accountRepository.save(any())).thenReturn(account);
@@ -94,7 +94,7 @@ class TransactionServiceTest {
         when(categoryRepository.findByIdAndUserOrDefault(5L, user)).thenReturn(Optional.of(category));
         Transaction saved = Transaction.builder().id(1L).type(TransactionType.EXPENSE)
                 .amount(new BigDecimal("200.00")).transactionDate(LocalDate.now())
-                .category(category).user(user).recurring(false).split(false).build();
+                .category(category).user(user).recurring(false).build();
         when(transactionRepository.save(any())).thenReturn(saved);
         when(accountRepository.findById(10L)).thenReturn(Optional.of(account));
         when(accountRepository.save(any())).thenReturn(account);
@@ -117,7 +117,7 @@ class TransactionServiceTest {
         when(categoryRepository.findByIdAndUserOrDefault(5L, user)).thenReturn(Optional.of(category));
         Transaction saved = Transaction.builder().id(1L).type(TransactionType.EXPENSE)
                 .amount(new BigDecimal("100.00")).transactionDate(LocalDate.now())
-                .category(category).user(user).recurring(false).split(false).build();
+                .category(category).user(user).recurring(false).build();
         when(transactionRepository.save(any())).thenReturn(saved);
 
         assertThatNoException().isThrownBy(() -> transactionService.create(request));
@@ -128,7 +128,7 @@ class TransactionServiceTest {
     void update_shouldReverseOldBalanceAndApplyNew() {
         Transaction existing = Transaction.builder().id(1L).type(TransactionType.EXPENSE)
                 .amount(new BigDecimal("200.00")).accountId(10L)
-                .category(category).user(user).recurring(false).split(false).build();
+                .category(category).user(user).recurring(false).build();
 
         TransactionRequest request = new TransactionRequest();
         request.setType(TransactionType.INCOME);
@@ -154,7 +154,7 @@ class TransactionServiceTest {
     void delete_shouldReverseTransactionBalance() {
         Transaction existing = Transaction.builder().id(1L).type(TransactionType.INCOME)
                 .amount(new BigDecimal("500.00")).accountId(10L)
-                .category(category).user(user).recurring(false).split(false).build();
+                .category(category).user(user).recurring(false).build();
 
         when(transactionRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(existing));
         when(accountRepository.findById(10L)).thenReturn(Optional.of(account));

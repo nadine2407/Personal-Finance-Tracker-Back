@@ -20,6 +20,7 @@ public class TransactionResponse {
     private String notes;
     private Long accountId;
     private String accountName;
+    private Long destinationAccountId;
     private Boolean recurring;
     private String recurrenceFrequency;
     private Boolean hidden;
@@ -43,6 +44,7 @@ public class TransactionResponse {
         dto.setTransactionDate(t.getTransactionDate());
         dto.setNotes(t.getNotes());
         dto.setAccountId(t.getAccountId());
+        dto.setDestinationAccountId(t.getDestinationAccountId());
         dto.setRecurring(t.getRecurring());
         dto.setRecurrenceFrequency(t.getRecurrenceFrequency());
         dto.setHidden(Boolean.TRUE.equals(t.getHidden()));

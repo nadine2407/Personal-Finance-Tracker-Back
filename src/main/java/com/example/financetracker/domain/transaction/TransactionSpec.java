@@ -48,4 +48,12 @@ public class TransactionSpec {
         return (root, query, cb) -> cb.equal(root.get("recurring"), recurring);
     }
 
+    public static Specification<Transaction> hasAccountId(Long accountId) {
+        return (root, query, cb) -> cb.equal(root.get("accountId"), accountId);
+    }
+
+    public static Specification<Transaction> hasDestinationAccountId(Long accountId) {
+        return (root, query, cb) -> cb.equal(root.get("destinationAccountId"), accountId);
+    }
+
 }

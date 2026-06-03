@@ -24,6 +24,9 @@ public class Transaction {
     @Column(length = 10)
     private TransactionType type;
 
+    @Column(name = "destination_account_id")
+    private Long destinationAccountId;
+
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
 

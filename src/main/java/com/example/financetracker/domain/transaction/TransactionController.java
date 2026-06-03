@@ -36,8 +36,10 @@ public class TransactionController {
             @RequestParam(required = false) BigDecimal maxAmount,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Boolean recurring,
+            @RequestParam(required = false) Long accountId,
+            @RequestParam(required = false) Long destinationAccountId,
             @PageableDefault(size = 10, sort = "transactionDate") Pageable pageable) {
-        return ResponseEntity.ok(transactionService.getAll(type, categoryId, startDate, endDate, minAmount, maxAmount, search, recurring, pageable));
+        return ResponseEntity.ok(transactionService.getAll(type, categoryId, startDate, endDate, minAmount, maxAmount, search, recurring, accountId, destinationAccountId, pageable));
     }
 
     @PostMapping

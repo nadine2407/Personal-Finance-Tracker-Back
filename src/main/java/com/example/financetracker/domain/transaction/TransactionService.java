@@ -32,24 +32,25 @@ public class TransactionService {
 
     public PageResponse<TransactionResponse> getAll(TransactionType type, Long categoryId,
             LocalDate startDate, LocalDate endDate, BigDecimal minAmount, BigDecimal maxAmount,
-            String search, Boolean recurring, Pageable pageable) {
+            String search, Boolean recurring, Long accountId, Long destinationAccountId, Pageable pageable) {
         User user = currentUser();
         Specification<Transaction> spec = TransactionSpec.forUser(user);
-        if (type != null)       spec = spec.and(TransactionSpec.hasType(type));
-        if (categoryId != null) spec = spec.and(TransactionSpec.hasCategoryId(categoryId));
-        if (startDate != null)  spec = spec.and(TransactionSpec.afterOrOn(startDate));
-        if (endDate != null)    spec = spec.and(TransactionSpec.beforeOrOn(endDate));
-        if (minAmount != null)  spec = spec.and(TransactionSpec.amountMin(minAmount));
-        if (maxAmount != null)  spec = spec.and(TransactionSpec.amountMax(maxAmount));
+        if (type != null)                  spec = spec.and(TransactionSpec.hasType(type));
+        if (categoryId != null)            spec = spec.and(TransactionSpec.hasCategoryId(categoryId));
+        if (startDate != null)             spec = spec.and(TransactionSpec.afterOrOn(startDate));
+        if (endDate != null)               spec = spec.and(TransactionSpec.beforeOrOn(endDate));
+        if (minAmount != null)             spec = spec.and(TransactionSpec.amountMin(minAmount));
+        if (maxAmount != null)             spec = spec.and(TransactionSpec.amountMax(maxAmount));
         if (search != null && !search.isBlank()) spec = spec.and(TransactionSpec.searchText(search));
-        if (recurring != null)  spec = spec.and(TransactionSpec.isRecurring(recurring));
+        if (recurring != null)             spec = spec.and(TransactionSpec.isRecurring(recurring));
+        if (accountId != null)             spec = spec.and(TransactionSpec.hasAccountId(accountId));
+        if (destinationAccountId != null)  spec = spec.and(TransactionSpec.hasDestinationAccountId(destinationAccountId));
         return PageResponse.from(transactionRepository.findAll(spec, pageable).map(TransactionResponse::from));
     }
 
     public TransactionResponse create(TransactionRequest request) {
         User user = currentUser();
-        Category category = categoryRepository.findByIdAndUserOrDefault(request.getCategoryId(), user)
-                .orElseThrow(() -> new ResourceNotFoundException("Category", request.getCategoryId()));
+        Category category = resolveCategory(request, user);
         Transaction transaction = Transaction.builder()
                 .type(request.getType())
                 .amount(request.getAmount())
@@ -57,13 +58,14 @@ public class TransactionService {
                 .transactionDate(request.getTransactionDate())
                 .notes(request.getNotes())
                 .accountId(request.getAccountId())
+                .destinationAccountId(request.getDestinationAccountId())
                 .recurring(request.getRecurring() != null ? request.getRecurring() : false)
                 .recurrenceFrequency(request.getRecurrenceFrequency())
                 .category(category)
                 .user(user)
                 .build();
         Transaction saved = transactionRepository.save(transaction);
-        adjustBalance(request.getAccountId(), request.getType(), request.getAmount(), false);
+        applyBalanceEffect(request.getType(), request.getAccountId(), request.getDestinationAccountId(), request.getAmount(), false);
         return TransactionResponse.from(saved);
     }
 
@@ -71,13 +73,12 @@ public class TransactionService {
         User user = currentUser();
         Transaction transaction = transactionRepository.findByIdAndUser(id, user)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", id));
-        Category category = categoryRepository.findByIdAndUserOrDefault(request.getCategoryId(), user)
-                .orElseThrow(() -> new ResourceNotFoundException("Category", request.getCategoryId()));
+        Category category = resolveCategory(request, user);
 
         // Only adjust balance if not hidden (hidden transactions don't affect balance)
         if (!Boolean.TRUE.equals(transaction.getHidden())) {
-            adjustBalance(transaction.getAccountId(), transaction.getType(), transaction.getAmount(), true);
-            adjustBalance(request.getAccountId(), request.getType(), request.getAmount(), false);
+            applyBalanceEffect(transaction.getType(), transaction.getAccountId(), transaction.getDestinationAccountId(), transaction.getAmount(), true);
+            applyBalanceEffect(request.getType(), request.getAccountId(), request.getDestinationAccountId(), request.getAmount(), false);
         }
 
         transaction.setType(request.getType());
@@ -86,6 +87,7 @@ public class TransactionService {
         transaction.setTransactionDate(request.getTransactionDate());
         transaction.setNotes(request.getNotes());
         transaction.setAccountId(request.getAccountId());
+        transaction.setDestinationAccountId(request.getDestinationAccountId());
         transaction.setRecurring(request.getRecurring() != null ? request.getRecurring() : false);
         transaction.setRecurrenceFrequency(request.getRecurrenceFrequency());
         transaction.setCategory(category);
@@ -105,7 +107,7 @@ public class TransactionService {
         boolean nowHidden = !Boolean.TRUE.equals(transaction.getHidden());
         transaction.setHidden(nowHidden);
         // Reverse balance when hiding, reapply when un-hiding
-        adjustBalance(transaction.getAccountId(), transaction.getType(), transaction.getAmount(), nowHidden);
+        applyBalanceEffect(transaction.getType(), transaction.getAccountId(), transaction.getDestinationAccountId(), transaction.getAmount(), nowHidden);
         return TransactionResponse.from(transactionRepository.save(transaction));
     }
 
@@ -114,17 +116,37 @@ public class TransactionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", id));
         // Only reverse balance if not already hidden (balance was already reversed on hide)
         if (!Boolean.TRUE.equals(transaction.getHidden())) {
-            adjustBalance(transaction.getAccountId(), transaction.getType(), transaction.getAmount(), true);
+            applyBalanceEffect(transaction.getType(), transaction.getAccountId(), transaction.getDestinationAccountId(), transaction.getAmount(), true);
         }
         transactionRepository.delete(transaction);
     }
 
-    private void adjustBalance(Long accountId, TransactionType type, BigDecimal amount, boolean reverse) {
-        if (accountId == null || amount == null) return;
+    private Category resolveCategory(TransactionRequest request, User user) {
+        if (request.getType() == TransactionType.TRANSFER || request.getCategoryId() == null) return null;
+        return categoryRepository.findByIdAndUserOrDefault(request.getCategoryId(), user)
+                .orElseThrow(() -> new ResourceNotFoundException("Category", request.getCategoryId()));
+    }
+
+    /**
+     * Applies or reverses the balance effect of a transaction.
+     * For TRANSFER: source loses money, destination gains money (reversed when reverse=true).
+     * For INCOME/EXPENSE: standard XOR logic.
+     */
+    private void applyBalanceEffect(TransactionType type, Long accountId, Long destinationAccountId, BigDecimal amount, boolean reverse) {
+        if (amount == null) return;
+        if (type == TransactionType.TRANSFER) {
+            adjustSingleBalance(accountId, amount, reverse);           // source: add back when reversing, subtract when not
+            adjustSingleBalance(destinationAccountId, amount, !reverse); // dest: subtract when reversing, add when not
+        } else {
+            boolean isIncome = type == TransactionType.INCOME;
+            adjustSingleBalance(accountId, amount, isIncome != reverse);
+        }
+    }
+
+    private void adjustSingleBalance(Long accountId, BigDecimal amount, boolean add) {
+        if (accountId == null) return;
         accountRepository.findById(accountId).ifPresent(account -> {
             BigDecimal current = account.getCurrentBalance() != null ? account.getCurrentBalance() : BigDecimal.ZERO;
-            boolean isIncome = type == TransactionType.INCOME;
-            boolean add = isIncome != reverse;
             account.setCurrentBalance(add ? current.add(amount) : current.subtract(amount));
             accountRepository.save(account);
         });
