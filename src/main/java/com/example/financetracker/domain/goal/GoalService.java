@@ -7,14 +7,19 @@ import com.example.financetracker.domain.account.AccountType;
 import com.example.financetracker.domain.auth.User;
 import com.example.financetracker.domain.auth.UserRepository;
 import com.example.financetracker.domain.goal.dto.AllocationRequest;
+import com.example.financetracker.domain.goal.dto.DebitRequest;
 import com.example.financetracker.domain.goal.dto.GoalRequest;
 import com.example.financetracker.domain.goal.dto.GoalResponse;
+import com.example.financetracker.domain.transaction.Transaction;
+import com.example.financetracker.domain.transaction.TransactionRepository;
+import com.example.financetracker.domain.transaction.TransactionType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -25,11 +30,71 @@ public class GoalService {
     private final GoalRepository goalRepository;
     private final UserRepository userRepository;
     private final AccountRepository accountRepository;
+    private final TransactionRepository transactionRepository;
 
     public List<GoalResponse> getAll() {
+        LocalDate now = LocalDate.now();
         return goalRepository.findByUser(currentUser()).stream()
+                .filter(g -> !g.isDebited() || (g.getDebitedAt() != null
+                        && g.getDebitedAt().getMonth() == now.getMonth()
+                        && g.getDebitedAt().getYear() == now.getYear()))
                 .map(GoalResponse::from)
                 .toList();
+    }
+
+    public GoalResponse debit(Long id, DebitRequest request) {
+        User user = currentUser();
+        Goal goal = goalRepository.findByIdAndUser(id, user)
+                .orElseThrow(() -> new ResourceNotFoundException("Goal", id));
+
+        if (goal.isDebited()) throw new IllegalStateException("Cet objectif a déjà été débité");
+
+        BigDecimal amount = goal.getLinkedAccountAmount() != null ? goal.getLinkedAccountAmount() : BigDecimal.ZERO;
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) throw new IllegalStateException("Aucun montant alloué à débiter");
+
+        Account savingsAccount = goal.getLinkedAccount();
+        Account checkingAccount = accountRepository.findByIdAndUser(request.getCheckingAccountId(), user)
+                .orElseThrow(() -> new ResourceNotFoundException("Account", request.getCheckingAccountId()));
+
+        // Désallouer l'objectif avant de toucher au solde
+        goal.setLinkedAccountAmount(BigDecimal.ZERO);
+        goal.setCurrentAmount(BigDecimal.ZERO);
+
+        // 1. TRANSFER épargne → courant (virement)
+        transactionRepository.save(Transaction.builder()
+                .type(TransactionType.TRANSFER)
+                .amount(amount)
+                .description("Virement objectif : " + goal.getName())
+                .transactionDate(LocalDate.now())
+                .accountId(savingsAccount.getId())
+                .destinationAccountId(checkingAccount.getId())
+                .user(user)
+                .recurring(false)
+                .hidden(false)
+                .build());
+        savingsAccount.setCurrentBalance(savingsAccount.getCurrentBalance().subtract(amount));
+        accountRepository.save(savingsAccount);
+        checkingAccount.setCurrentBalance(checkingAccount.getCurrentBalance().add(amount));
+        accountRepository.save(checkingAccount);
+
+        // 2. EXPENSE sur le compte courant (débit immédiat)
+        transactionRepository.save(Transaction.builder()
+                .type(TransactionType.EXPENSE)
+                .amount(amount)
+                .description("Objectif atteint : " + goal.getName())
+                .transactionDate(LocalDate.now())
+                .accountId(checkingAccount.getId())
+                .user(user)
+                .recurring(false)
+                .hidden(false)
+                .build());
+        checkingAccount.setCurrentBalance(checkingAccount.getCurrentBalance().subtract(amount));
+        accountRepository.save(checkingAccount);
+
+        // Marquer l'objectif comme débité
+        goal.setDebited(true);
+        goal.setDebitedAt(LocalDate.now());
+        return GoalResponse.from(goalRepository.save(goal));
     }
 
     public GoalResponse create(GoalRequest request) {

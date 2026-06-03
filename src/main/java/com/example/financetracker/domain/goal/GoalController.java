@@ -1,6 +1,7 @@
 package com.example.financetracker.domain.goal;
 
 import com.example.financetracker.domain.goal.dto.AllocationRequest;
+import com.example.financetracker.domain.goal.dto.DebitRequest;
 import com.example.financetracker.domain.goal.dto.GoalRequest;
 import com.example.financetracker.domain.goal.dto.GoalResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,6 +53,13 @@ public class GoalController {
                                               @RequestParam String direction) {
         goalService.movePriority(id, direction);
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/debit")
+    @Operation(summary = "Debit a completed goal: creates EXPENSE on savings and INCOME on checking account")
+    public ResponseEntity<GoalResponse> debit(@PathVariable Long id,
+                                               @Valid @RequestBody DebitRequest request) {
+        return ResponseEntity.ok(goalService.debit(id, request));
     }
 
     @DeleteMapping("/{id}")

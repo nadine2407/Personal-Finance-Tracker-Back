@@ -18,6 +18,8 @@ public class GoalResponse {
     private LocalDate deadline;
     private String description;
     private boolean completed;
+    private boolean debited;
+    private LocalDate debitedAt;
     private double progressPercent;
     private BigDecimal remainingAmount;
     private Long linkedAccountId;
@@ -48,8 +50,11 @@ public class GoalResponse {
             dto.setLinkedAccountName(goal.getLinkedAccount().getName());
         }
 
+        dto.setDebited(goal.isDebited());
+        dto.setDebitedAt(goal.getDebitedAt());
+
         BigDecimal target = goal.getTargetAmount();
-        dto.setCompleted(allocated.compareTo(target) >= 0);
+        dto.setCompleted(allocated.compareTo(target) >= 0 || goal.isDebited());
         dto.setRemainingAmount(target.subtract(allocated).max(BigDecimal.ZERO));
 
         if (target.compareTo(BigDecimal.ZERO) > 0) {

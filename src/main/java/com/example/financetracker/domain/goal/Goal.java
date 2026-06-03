@@ -45,6 +45,12 @@ public class Goal {
     @Column(name = "priority")
     private Integer priority;
 
+    @Column(name = "debited", columnDefinition = "boolean NOT NULL DEFAULT false")
+    private boolean debited = false;
+
+    @Column(name = "debited_at")
+    private LocalDate debitedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
