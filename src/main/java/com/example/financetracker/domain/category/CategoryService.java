@@ -31,6 +31,7 @@ public class CategoryService {
                 .name(request.getName())
                 .icon(request.getIcon())
                 .color(request.getColor())
+                .type(request.getType())
                 .isDefault(false)
                 .user(user)
                 .build();
@@ -44,6 +45,7 @@ public class CategoryService {
         category.setName(request.getName());
         category.setIcon(request.getIcon());
         category.setColor(request.getColor());
+        category.setType(request.getType());
         return CategoryResponse.from(categoryRepository.save(category));
     }
 

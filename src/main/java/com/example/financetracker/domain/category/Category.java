@@ -29,6 +29,11 @@ public class Category {
     @Builder.Default
     private Boolean isDefault = false;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    @Builder.Default
+    private CategoryType type = CategoryType.BOTH;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
