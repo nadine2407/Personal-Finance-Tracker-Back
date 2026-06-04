@@ -1,4 +1,4 @@
-# Personal Finance Tracker
+# MyBudget
 
 > Application web de gestion des finances personnelles — Master 1 Informatique, S2 Programmation Web 2025–2026
 >
