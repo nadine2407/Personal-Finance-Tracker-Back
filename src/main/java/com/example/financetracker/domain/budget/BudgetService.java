@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,7 +52,14 @@ public class BudgetService {
                         t -> t.getCategory().getId(),
                         Collectors.reducing(BigDecimal.ZERO, Transaction::getAmount, BigDecimal::add)));
 
-        List<BudgetStatusItem> items = budgets.stream().map(b -> {
+        // Categories that have a manual budget
+        Set<Long> budgetedCategoryIds = budgets.stream()
+                .filter(b -> b.getCategory() != null)
+                .map(b -> b.getCategory().getId())
+                .collect(Collectors.toSet());
+
+        // Build items for manually budgeted categories
+        List<BudgetStatusItem> plannedItems = budgets.stream().map(b -> {
             Long catId = b.getCategory() != null ? b.getCategory().getId() : null;
             BigDecimal spent = catId != null ? spentByCategory.getOrDefault(catId, BigDecimal.ZERO) : BigDecimal.ZERO;
             BigDecimal remaining = b.getAmount().subtract(spent);
@@ -77,18 +85,49 @@ public class BudgetService {
                     .percentage(pct)
                     .status(status)
                     .build();
-        }).toList();
+        }).collect(Collectors.toCollection(ArrayList::new));
 
-        BigDecimal totalBudget = items.stream().map(BudgetStatusItem::getBudgetAmount)
+        // Build items for categories with expenses but no manual budget (unplanned)
+        // Group first expense per category to retrieve category metadata
+        Map<Long, Transaction> firstTxByCategory = expenses.stream()
+                .filter(t -> t.getCategory() != null && !Boolean.TRUE.equals(t.getHidden()))
+                .collect(Collectors.toMap(
+                        t -> t.getCategory().getId(),
+                        t -> t,
+                        (a, b) -> a));
+
+        List<BudgetStatusItem> unplannedItems = spentByCategory.entrySet().stream()
+                .filter(e -> !budgetedCategoryIds.contains(e.getKey()))
+                .map(e -> {
+                    Transaction sample = firstTxByCategory.get(e.getKey());
+                    BigDecimal spent = e.getValue();
+                    return BudgetStatusItem.builder()
+                            .id(null)
+                            .categoryId(e.getKey())
+                            .categoryName(sample != null ? sample.getCategory().getName() : "?")
+                            .categoryColor(sample != null ? sample.getCategory().getColor() : null)
+                            .categoryIcon(sample != null ? sample.getCategory().getIcon() : null)
+                            .budgetAmount(BigDecimal.ZERO)
+                            .spentAmount(spent)
+                            .remainingAmount(spent.negate())
+                            .percentage(100.0)
+                            .status(BudgetStatus.UNPLANNED)
+                            .build();
+                }).toList();
+
+        List<BudgetStatusItem> allItems = new ArrayList<>(plannedItems);
+        allItems.addAll(unplannedItems);
+
+        BigDecimal totalBudget = plannedItems.stream().map(BudgetStatusItem::getBudgetAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalSpent = items.stream().map(BudgetStatusItem::getSpentAmount)
+        BigDecimal totalSpent = allItems.stream().map(BudgetStatusItem::getSpentAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal overspend = items.stream()
-                .filter(i -> i.getStatus() == BudgetStatus.OVER)
+        BigDecimal overspend = allItems.stream()
+                .filter(i -> i.getStatus() == BudgetStatus.OVER || i.getStatus() == BudgetStatus.UNPLANNED)
                 .map(i -> i.getSpentAmount().subtract(i.getBudgetAmount()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        int warnCount = (int) items.stream().filter(i -> i.getStatus() == BudgetStatus.WARN).count();
-        int overCount = (int) items.stream().filter(i -> i.getStatus() == BudgetStatus.OVER).count();
+        int warnCount = (int) plannedItems.stream().filter(i -> i.getStatus() == BudgetStatus.WARN).count();
+        int overCount = (int) plannedItems.stream().filter(i -> i.getStatus() == BudgetStatus.OVER).count();
 
         return BudgetPageSummary.builder()
                 .year(year)
@@ -99,7 +138,7 @@ public class BudgetService {
                 .overspend(overspend)
                 .warnCount(warnCount)
                 .overCount(overCount)
-                .items(items)
+                .items(allItems)
                 .build();
     }
 

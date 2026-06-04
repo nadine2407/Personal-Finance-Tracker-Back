@@ -23,6 +23,8 @@ public class TransactionResponse {
     private Long destinationAccountId;
     private Boolean recurring;
     private String recurrenceFrequency;
+    private String recurrenceGroupId;
+    private LocalDate recurrenceEndDate;
     private Boolean hidden;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
@@ -47,6 +49,8 @@ public class TransactionResponse {
         dto.setDestinationAccountId(t.getDestinationAccountId());
         dto.setRecurring(t.getRecurring());
         dto.setRecurrenceFrequency(t.getRecurrenceFrequency());
+        dto.setRecurrenceGroupId(t.getRecurrenceGroupId());
+        dto.setRecurrenceEndDate(t.getRecurrenceEndDate());
         dto.setHidden(Boolean.TRUE.equals(t.getHidden()));
         dto.setCreatedAt(t.getCreatedAt());
         dto.setUpdatedAt(t.getUpdatedAt());

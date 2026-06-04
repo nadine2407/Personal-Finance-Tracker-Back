@@ -74,4 +74,11 @@ public class TransactionController {
         transactionService.delete(id);
         return ResponseEntity.noContent().build();
     }
+
+    @DeleteMapping("/{id}/future")
+    @Operation(summary = "Delete this occurrence and all future ones in the same recurrence group")
+    public ResponseEntity<Void> deleteFuture(@PathVariable Long id) {
+        transactionService.deleteFutureFromGroup(id);
+        return ResponseEntity.noContent().build();
+    }
 }

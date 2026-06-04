@@ -18,4 +18,6 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
 
     List<Transaction> findByUserAndTypeAndTransactionDateBetween(
             User user, TransactionType type, LocalDate from, LocalDate to);
+
+    List<Transaction> findByRecurrenceGroupIdAndUser(String recurrenceGroupId, User user);
 }

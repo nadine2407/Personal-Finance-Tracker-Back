@@ -26,8 +26,10 @@ public class TransactionRequest {
     private Long categoryId;
 
     private String notes;
+    @NotNull
     private Long accountId;
     private Long destinationAccountId;
     private Boolean recurring;
     private String recurrenceFrequency;
+    private LocalDate recurrenceEndDate;
 }

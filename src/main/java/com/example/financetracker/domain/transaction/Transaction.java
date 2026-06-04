@@ -52,6 +52,12 @@ public class Transaction {
     @Column(name = "recurrence_frequency", length = 20)
     private String recurrenceFrequency;
 
+    @Column(name = "recurrence_group_id", length = 36)
+    private String recurrenceGroupId;
+
+    @Column(name = "recurrence_end_date")
+    private LocalDate recurrenceEndDate;
+
     @Column(name = "is_hidden")
     private Boolean hidden;
 

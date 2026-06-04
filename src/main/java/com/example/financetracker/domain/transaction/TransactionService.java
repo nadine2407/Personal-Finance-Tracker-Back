@@ -20,6 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -53,23 +56,80 @@ public class TransactionService {
     public TransactionResponse create(TransactionRequest request) {
         User user = currentUser();
         Category category = resolveCategory(request, user);
-        Transaction transaction = Transaction.builder()
-                .type(request.getType())
-                .amount(request.getAmount())
-                .description(request.getDescription())
-                .transactionDate(request.getTransactionDate())
-                .notes(request.getNotes())
-                .accountId(request.getAccountId())
-                .destinationAccountId(request.getDestinationAccountId())
-                .recurring(request.getRecurring() != null ? request.getRecurring() : false)
-                .recurrenceFrequency(request.getRecurrenceFrequency())
-                .category(category)
-                .user(user)
-                .build();
+        boolean isRecurring = Boolean.TRUE.equals(request.getRecurring()) && request.getRecurrenceFrequency() != null;
+
+        if (isRecurring) {
+            return createRecurringSeries(request, category, user);
+        }
+
+        Transaction transaction = buildTransaction(request, category, user, null, null, null);
         Transaction saved = transactionRepository.save(transaction);
         applyBalanceEffect(request.getType(), request.getAccountId(), request.getDestinationAccountId(), request.getAmount(), false);
         rebalanceAccounts(request.getAccountId(), request.getDestinationAccountId());
         return TransactionResponse.from(saved);
+    }
+
+    private TransactionResponse createRecurringSeries(TransactionRequest request, Category category, User user) {
+        LocalDate start = request.getTransactionDate();
+        LocalDate maxEnd = start.plusYears(1);
+        LocalDate end = request.getRecurrenceEndDate() != null
+                ? (request.getRecurrenceEndDate().isAfter(maxEnd) ? maxEnd : request.getRecurrenceEndDate())
+                : maxEnd;
+
+        String groupId = UUID.randomUUID().toString();
+        List<LocalDate> dates = computeOccurrenceDates(start, request.getRecurrenceFrequency(), end);
+        LocalDate today = LocalDate.now();
+
+        Transaction first = null;
+        for (LocalDate date : dates) {
+            Transaction tx = buildTransaction(request, category, user, groupId, end, date);
+            Transaction saved = transactionRepository.save(tx);
+            // Apply balance only for past/current occurrences
+            if (!date.isAfter(today)) {
+                applyBalanceEffect(request.getType(), request.getAccountId(), request.getDestinationAccountId(), request.getAmount(), false);
+            }
+            if (first == null) first = saved;
+        }
+        rebalanceAccounts(request.getAccountId(), request.getDestinationAccountId());
+        return TransactionResponse.from(first);
+    }
+
+    private Transaction buildTransaction(TransactionRequest request, Category category, User user,
+                                         String groupId, LocalDate endDate, LocalDate date) {
+        return Transaction.builder()
+                .type(request.getType())
+                .amount(request.getAmount())
+                .description(request.getDescription())
+                .transactionDate(date != null ? date : request.getTransactionDate())
+                .notes(request.getNotes())
+                .accountId(request.getAccountId())
+                .destinationAccountId(request.getDestinationAccountId())
+                .recurring(groupId != null)
+                .recurrenceFrequency(groupId != null ? request.getRecurrenceFrequency() : null)
+                .recurrenceGroupId(groupId)
+                .recurrenceEndDate(endDate)
+                .category(category)
+                .user(user)
+                .hidden(false)
+                .build();
+    }
+
+    private List<LocalDate> computeOccurrenceDates(LocalDate start, String frequency, LocalDate end) {
+        List<LocalDate> dates = new ArrayList<>();
+        LocalDate current = start;
+        while (!current.isAfter(end)) {
+            dates.add(current);
+            current = switch (frequency) {
+                case "DAILY"     -> current.plusDays(1);
+                case "WEEKLY"    -> current.plusWeeks(1);
+                case "BIWEEKLY"  -> current.plusWeeks(2);
+                case "MONTHLY"   -> current.plusMonths(1);
+                case "QUARTERLY" -> current.plusMonths(3);
+                case "YEARLY"    -> current.plusYears(1);
+                default          -> end.plusDays(1); // stop
+            };
+        }
+        return dates;
     }
 
     public TransactionResponse update(Long id, TransactionRequest request) {
@@ -78,9 +138,13 @@ public class TransactionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", id));
         Category category = resolveCategory(request, user);
 
-        if (!Boolean.TRUE.equals(transaction.getHidden())) {
+        if (isBalanceActive(transaction)) {
             applyBalanceEffect(transaction.getType(), transaction.getAccountId(), transaction.getDestinationAccountId(), transaction.getAmount(), true);
-            applyBalanceEffect(request.getType(), request.getAccountId(), request.getDestinationAccountId(), request.getAmount(), false);
+        }
+        if (!Boolean.TRUE.equals(request.getRecurring()) || !request.getTransactionDate().isAfter(LocalDate.now())) {
+            if (!Boolean.TRUE.equals(transaction.getHidden())) {
+                applyBalanceEffect(request.getType(), request.getAccountId(), request.getDestinationAccountId(), request.getAmount(), false);
+            }
         }
 
         transaction.setType(request.getType());
@@ -120,11 +184,40 @@ public class TransactionService {
     public void delete(Long id) {
         Transaction transaction = transactionRepository.findByIdAndUser(id, currentUser())
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", id));
-        if (!Boolean.TRUE.equals(transaction.getHidden())) {
+        if (isBalanceActive(transaction)) {
             applyBalanceEffect(transaction.getType(), transaction.getAccountId(), transaction.getDestinationAccountId(), transaction.getAmount(), true);
         }
         rebalanceAccounts(transaction.getAccountId(), transaction.getDestinationAccountId());
         transactionRepository.delete(transaction);
+    }
+
+    public void deleteFutureFromGroup(Long id) {
+        User user = currentUser();
+        Transaction pivot = transactionRepository.findByIdAndUser(id, user)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction", id));
+
+        String groupId = pivot.getRecurrenceGroupId();
+        if (groupId == null) { delete(id); return; }
+
+        LocalDate fromDate = pivot.getTransactionDate();
+        List<Transaction> toDelete = transactionRepository.findByRecurrenceGroupIdAndUser(groupId, user)
+                .stream()
+                .filter(t -> !t.getTransactionDate().isBefore(fromDate))
+                .toList();
+
+        for (Transaction tx : toDelete) {
+            if (isBalanceActive(tx)) {
+                applyBalanceEffect(tx.getType(), tx.getAccountId(), tx.getDestinationAccountId(), tx.getAmount(), true);
+            }
+        }
+        transactionRepository.deleteAll(toDelete);
+        rebalanceAccounts(pivot.getAccountId(), pivot.getDestinationAccountId());
+    }
+
+    private boolean isBalanceActive(Transaction tx) {
+        return !Boolean.TRUE.equals(tx.getHidden())
+                && tx.getTransactionDate() != null
+                && !tx.getTransactionDate().isAfter(LocalDate.now());
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
